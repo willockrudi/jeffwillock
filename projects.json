@@ -1,12 +1,40 @@
 [
   {
+    "title": "d",
+    "status": "Complete",
+    "cover_image": "images/2026-03-01-d.png",
+    "image": "images/2026-03-01-d.png",
+    "images": [],
+    "alt": "d",
+    "description": "dfg",
+    "bullets": ["dfg"],
+    "tags": ["prototype"],
+    "links": [],
+    "created": "2026-03-01T20:45:58"
+  },
+  {
+    "title": "a",
+    "status": "Complete",
+    "cover_image": "images/2026-03-01-a.png",
+    "image": "images/2026-03-01-a.png",
+    "images": [],
+    "alt": "a",
+    "description": "a",
+    "bullets": ["a"],
+    "tags": ["fabrication"],
+    "links": [],
+    "created": "2026-03-01T20:42:31"
+  },
+  {
     "title": "test",
+    "status": "Complete",
+    "cover_image": "images/2026-03-01-boat.png",
     "image": "images/2026-03-01-boat.png",
+    "images": [],
     "alt": "test",
     "description": "testy test",
-    "bullets": [
-      "still cool"
-    ],
+    "bullets": ["still cool"],
+    "tags": ["marine", "build"],
     "links": [],
     "created": "2026-03-01T18:45:34",
     "updated": "2026-03-01T18:59:22"

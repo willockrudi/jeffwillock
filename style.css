@@ -1,3 +1,6 @@
+
+
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -154,3 +157,157 @@ header {
 .muted { color: #666; margin-top: 0.75rem; }
 
 .footer { text-align: center; margin-top: 4rem; color: #777; }
+
+.filter-bar {
+  margin: 16px 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.search {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.12);
+  font-size: 16px;
+  outline: none;
+}
+
+.search:focus {
+  border-color: rgba(0,0,0,0.25);
+}
+
+.tag-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-filter {
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(0,0,0,0.03);
+  padding: 8px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.tag-filter.is-active {
+  border-color: rgba(0,0,0,0.35);
+  background: rgba(0,0,0,0.08);
+}
+
+/* --- NEW: per-card tag chips --- */
+.card-tags {
+  margin: 0.25rem 0 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-chip {
+  display: inline-block;
+  background: #eef0f2;
+  color: #333;
+  border: 1px solid rgba(0,0,0,0.08);
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+/* =======================
+   Dark mode (data-theme)
+   ======================= */
+.theme-toggle {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(0,0,0,0.03);
+  cursor: pointer;
+  font: inherit;
+}
+
+.theme-toggle:hover {
+  background: rgba(0,0,0,0.07);
+}
+
+/* Dark theme overrides */
+html[data-theme="dark"] body {
+  background: #0f1115;
+  color: #e7eaf0;
+}
+
+html[data-theme="dark"] .subtitle,
+html[data-theme="dark"] .section-note,
+html[data-theme="dark"] .muted,
+html[data-theme="dark"] .project-info p {
+  color: #b7beca;
+}
+
+html[data-theme="dark"] .quick a {
+  color: #e7eaf0;
+}
+
+html[data-theme="dark"] .quick a:hover {
+  border-bottom-color: #e7eaf0;
+}
+
+html[data-theme="dark"] .project-card {
+  background: #171a21;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+}
+
+html[data-theme="dark"] .search {
+  background: #171a21;
+  color: #e7eaf0;
+  border-color: rgba(255,255,255,0.14);
+}
+
+html[data-theme="dark"] .tag-filter {
+  border-color: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #e7eaf0;
+}
+
+html[data-theme="dark"] .tag-filter.is-active {
+  border-color: rgba(255,255,255,0.32);
+  background: rgba(255,255,255,0.10);
+}
+
+html[data-theme="dark"] .tags span,
+html[data-theme="dark"] .tag-chip {
+  background: rgba(255,255,255,0.08);
+  color: #e7eaf0;
+  border-color: rgba(255,255,255,0.10);
+}
+
+html[data-theme="dark"] .links a {
+  background: #2b2f3a;
+}
+
+html[data-theme="dark"] .links a:hover {
+  background: #3a3f4d;
+}
+
+html[data-theme="dark"] .gallery-toggle,
+html[data-theme="dark"] .theme-toggle {
+  border-color: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #e7eaf0;
+}
+
+html[data-theme="dark"] .gallery-toggle:hover,
+html[data-theme="dark"] .theme-toggle:hover {
+  background: rgba(255,255,255,0.10);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+

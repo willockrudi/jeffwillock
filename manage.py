@@ -1,3 +1,4 @@
+
 import json
 import os
 import re
@@ -5,29 +6,64 @@ import shutil
 from datetime import datetime
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+
+# Main Builds page
 INDEX_PATH = os.path.join(ROOT, "index.html")
 TEMPLATE_PATH = os.path.join(ROOT, "template.html")
+
+# Troubleshooting page
+REPAIRS_INDEX_PATH = os.path.join(ROOT, "repairs.html")
+REPAIRS_TEMPLATE_PATH = os.path.join(ROOT, "repairs_template.html")
+
+# Data files
 DATA_PATH = os.path.join(ROOT, "projects.json")
+REPAIRS_PATH = os.path.join(ROOT, "repairs.json")
 SITE_PATH = os.path.join(ROOT, "site.json")
+
+# Assets
 IMAGES_DIR = os.path.join(ROOT, "images")
 
+# Markers
 PROJECTS_START = "<!-- PROJECTS_START -->"
 PROJECTS_END = "<!-- PROJECTS_END -->"
+REPAIRS_START = "<!-- REPAIRS_START -->"
+REPAIRS_END = "<!-- REPAIRS_END -->"
 TAGS_START = "<!-- TAGS_START -->"
 TAGS_END = "<!-- TAGS_END -->"
 
 
 # ---------- Data IO ----------
-def load_projects():
-    if not os.path.exists(DATA_PATH):
+def _load_json_list(path: str) -> list:
+    if not os.path.exists(path):
         return []
-    with open(DATA_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except json.JSONDecodeError:
+        print(f"⚠️  JSON parse error in {os.path.basename(path)}. Using empty list.")
+        return []
+
+
+def _save_json(path: str, obj):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2, ensure_ascii=False)
+
+
+def load_projects():
+    return _load_json_list(DATA_PATH)
 
 
 def save_projects(projects):
-    with open(DATA_PATH, "w", encoding="utf-8") as f:
-        json.dump(projects, f, indent=2, ensure_ascii=False)
+    _save_json(DATA_PATH, projects)
+
+
+def load_repairs():
+    return _load_json_list(REPAIRS_PATH)
+
+
+def save_repairs(repairs):
+    _save_json(REPAIRS_PATH, repairs)
 
 
 def load_site():
@@ -42,21 +78,47 @@ def load_site():
             "youtube_url": "",
             "tags": [],
         }
-    with open(SITE_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(SITE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {
+                "name": "Your Name",
+                "tagline": "",
+                "build_log_note": "",
+                "about_text": "",
+                "email": "",
+                "instagram_url": "",
+                "youtube_url": "",
+                "tags": [],
+            }
+        # Ensure keys exist
+        data.setdefault("tags", [])
+        return data
+    except json.JSONDecodeError:
+        print("⚠️  JSON parse error in site.json. Using defaults.")
+        return {
+            "name": "Your Name",
+            "tagline": "",
+            "build_log_note": "",
+            "about_text": "",
+            "email": "",
+            "instagram_url": "",
+            "youtube_url": "",
+            "tags": [],
+        }
 
 
 def save_site(site):
-    with open(SITE_PATH, "w", encoding="utf-8") as f:
-        json.dump(site, f, indent=2, ensure_ascii=False)
+    _save_json(SITE_PATH, site)
 
 
 # ---------- Helpers ----------
 def slugify(text: str) -> str:
-    text = text.strip().lower()
+    text = (text or "").strip().lower()
     text = re.sub(r"[^a-z0-9]+", "-", text)
     text = re.sub(r"-+", "-", text).strip("-")
-    return text or "project"
+    return text or "item"
 
 
 def prompt(msg: str, default: str | None = None, optional: bool = False) -> str:
@@ -112,10 +174,27 @@ def prompt_bullets(default_list=None):
     return bullets if bullets else default_list
 
 
+def prompt_tags(default_list=None):
+    if default_list is None:
+        default_list = []
+
+    print("\nTags (optional). Enter tags one per line. Blank line to finish.")
+    if default_list:
+        print("Current tags:")
+        for t in default_list:
+            print(f"  - {t}")
+
+    tags = []
+    while True:
+        t = input("  - ").strip()
+        if t == "":
+            break
+        tags.append(t)
+
+    return tags if tags else default_list
+
+
 def normalize_status(value: str) -> str:
-    """
-    Keeps status consistent even if user types short versions.
-    """
     v = (value or "").strip().lower()
     if v in ["in progress", "progress", "in-progress", "inprogress", "ip"]:
         return "In Progress"
@@ -123,14 +202,10 @@ def normalize_status(value: str) -> str:
         return "Complete"
     if v in ["archived", "archive", "old", "a"]:
         return "Archived"
-    # fallback: Title Case whatever they typed
     return (value or "Complete").strip().title()
 
 
 def status_badge(status: str) -> tuple[str, str]:
-    """
-    Returns (css_class, display_text)
-    """
     s = (status or "Complete").strip().lower()
     if s.startswith("in"):
         return ("status-progress", "🛠 In Progress")
@@ -143,7 +218,7 @@ def copy_image_into_site(image_path: str, title: str) -> str:
     os.makedirs(IMAGES_DIR, exist_ok=True)
 
     # PowerShell drag/drop often includes quotes
-    image_path = image_path.strip().strip('"')
+    image_path = (image_path or "").strip().strip('"')
 
     if not os.path.isfile(image_path):
         raise FileNotFoundError(f"Image not found: {image_path}")
@@ -165,9 +240,77 @@ def copy_image_into_site(image_path: str, title: str) -> str:
 
 
 # ---------- HTML generation ----------
+def _lines_to_br(text: str) -> str:
+    text = (text or "").strip()
+    return "<br>".join([line.strip() for line in text.splitlines() if line.strip()])
+
+
+def _card_tags_block(tags: list[str]) -> tuple[str, str]:
+    """
+    Returns:
+      - data-tags string (slugified) for JS filtering
+      - HTML chips block (original strings) for display
+    """
+    tags = tags or []
+    clean = [t for t in tags if str(t).strip()]
+    data_tags = ",".join([slugify(t) for t in clean])
+    if not clean:
+        return data_tags, ""
+
+    chips = "\n".join([f'            <span class="tag-chip">{t}</span>' for t in clean])
+    tags_html = f"""
+          <div class="card-tags">
+{chips}
+          </div>"""
+    return data_tags, tags_html
+
+
+def repair_card_html(r: dict) -> str:
+    title = r.get("title", "Untitled Repair")
+    alt = r.get("alt", title)
+
+    date = (r.get("date") or "").strip()
+    status = (r.get("status") or "").strip()
+    device = (r.get("device") or "").strip()
+
+    symptom = _lines_to_br(r.get("symptom", ""))
+    diagnosis = _lines_to_br(r.get("diagnosis", ""))
+    fix = _lines_to_br(r.get("fix", ""))
+    notes = _lines_to_br(r.get("notes", ""))
+
+    img = (r.get("image") or "").strip()
+    img_html = f'<img src="{img}" alt="{alt}">' if img else ""
+
+    meta_bits = [b for b in [date, status] if b]
+    meta_html = f'<p class="muted">{" • ".join(meta_bits)}</p>' if meta_bits else ""
+
+    data_tags, tags_html = _card_tags_block(r.get("tags") or [])
+
+    def line(label: str, value_html: str) -> str:
+        value_html = (value_html or "").strip()
+        if not value_html:
+            return ""
+        return f"<p><strong>{label}:</strong> {value_html}</p>"
+
+    return f"""
+      <div class="project-card" data-tags="{data_tags}">
+        {img_html}
+        <div class="project-info">
+          <h3>{title}</h3>
+          {meta_html}
+          {tags_html}
+          {line("Device", device)}
+          {line("Symptom", symptom)}
+          {line("Diagnosis", diagnosis)}
+          {line("Fix", fix)}
+          {f"<p>{notes}</p>" if notes else ""}
+        </div>
+      </div>
+""".rstrip() + "\n"
+
+
 def project_card_html(p: dict) -> str:
-    desc = (p.get("description") or "").strip()
-    desc_html = "<br>".join([line.strip() for line in desc.splitlines() if line.strip()])
+    desc_html = _lines_to_br(p.get("description", ""))
 
     bullets = p.get("bullets") or []
     bullets_html = ""
@@ -183,12 +326,10 @@ def project_card_html(p: dict) -> str:
     if links:
         link_tags = []
         for link in links:
-            label = link.get("label", "Link")
+            label = (link.get("label") or "Link").strip()
             url = (link.get("url") or "").strip()
             if url:
-                link_tags.append(
-                    f'            <a href="{url}" target="_blank" rel="noopener">{label}</a>'
-                )
+                link_tags.append(f'            <a href="{url}" target="_blank" rel="noopener">{label}</a>')
         if link_tags:
             links_html = f"""
           <div class="links">
@@ -196,18 +337,34 @@ def project_card_html(p: dict) -> str:
           </div>"""
 
     title = p.get("title", "Untitled")
-    img = p.get("image", "")
     alt = p.get("alt", title)
 
     status = normalize_status(p.get("status", "Complete"))
     badge_class, badge_text = status_badge(status)
 
+    cover = (p.get("cover_image") or p.get("image") or "").strip()
+
+    images = p.get("images") or []
+    images = [img for img in images if isinstance(img, str) and img.strip()]
+
+    gallery_html = ""
+    if images:
+        gallery_id = f"gallery-{slugify(title)}-{abs(hash(cover)) % 100000}"
+        thumbs = "\n".join([f'            <img src="{img}" alt="{alt}">' for img in images])
+        gallery_html = f"""
+          <button class="gallery-toggle" type="button" data-gallery-toggle="{gallery_id}">More photos</button>
+          <div class="gallery" id="{gallery_id}">
+{thumbs}
+          </div>"""
+
+    data_tags, tags_html = _card_tags_block(p.get("tags") or [])
+
     return f"""
-      <div class="project-card">
-        <img src="{img}" alt="{alt}">
+      <div class="project-card" data-tags="{data_tags}">
+        <img src="{cover}" alt="{alt}">
         <div class="project-info">
           <h3>{title} <span class="status-badge {badge_class}">{badge_text}</span></h3>
-          <p>{desc_html}</p>{bullets_html}{links_html}
+          <p>{desc_html}</p>{tags_html}{bullets_html}{links_html}{gallery_html}
         </div>
       </div>
 """.rstrip() + "\n"
@@ -229,10 +386,11 @@ def replace_placeholders(html: str, site: dict) -> str:
 
 
 def inject_tags(html: str, tags: list[str]) -> str:
+    # This injects the ABOUT section tags, not per-card tags
     if TAGS_START not in html or TAGS_END not in html:
         return html
 
-    tag_html = "\n".join([f"        <span>{t}</span>" for t in tags])
+    tag_html = "\n".join([f"        <span>{t}</span>" for t in (tags or [])])
 
     s = html.index(TAGS_START) + len(TAGS_START)
     e = html.index(TAGS_END)
@@ -259,7 +417,6 @@ def rebuild_index_from_projects(projects):
 
     start_i = template.index(PROJECTS_START) + len(PROJECTS_START)
     end_i = template.index(PROJECTS_END)
-
     cards = "".join(project_card_html(p) for p in projects)
     new_content = template[:start_i] + "\n" + cards + template[end_i:]
 
@@ -272,21 +429,76 @@ def rebuild_index_from_projects(projects):
         f.write(new_content)
 
 
+def rebuild_repairs_page():
+    if not os.path.isfile(REPAIRS_TEMPLATE_PATH):
+        raise FileNotFoundError(
+            f"repairs_template.html not found at {REPAIRS_TEMPLATE_PATH}\n"
+            "Create it by creating repairs_template.html"
+        )
+
+    with open(REPAIRS_TEMPLATE_PATH, "r", encoding="utf-8") as f:
+        template = f.read()
+
+    if REPAIRS_START not in template or REPAIRS_END not in template:
+        raise ValueError(
+            "Markers not found in repairs_template.html.\n"
+            "Add:\n"
+            "<!-- REPAIRS_START -->\n"
+            "<!-- REPAIRS_END -->"
+        )
+
+    repairs = load_repairs()
+    rs = template.index(REPAIRS_START) + len(REPAIRS_START)
+    re_ = template.index(REPAIRS_END)
+    repair_cards = "".join(repair_card_html(r) for r in repairs)
+    new_content = template[:rs] + "\n" + repair_cards + template[re_:]
+
+    if os.path.exists(SITE_PATH):
+        site = load_site()
+        new_content = replace_placeholders(new_content, site)
+        new_content = inject_tags(new_content, site.get("tags", []))
+
+    with open(REPAIRS_INDEX_PATH, "w", encoding="utf-8") as f:
+        f.write(new_content)
+
+
 # ---------- Commands ----------
 def list_projects(projects):
     if not projects:
         print("No projects yet.")
         return
-    print("\nProjects:")
+    print("\nBuilds:")
     for i, p in enumerate(projects, start=1):
         status = normalize_status(p.get("status", "Complete"))
-        print(f"  {i}. {p.get('title','Untitled')}  [{status}]")
+        tags = p.get("tags") or []
+        tag_str = ", ".join(tags) if tags else ""
+        print(f"  {i}. {p.get('title','Untitled')}  [{status}]" + (f"  ({tag_str})" if tag_str else ""))
+
+
+def list_repairs(repairs):
+    if not repairs:
+        print("No repair logs yet.")
+        return
+    print("\nTroubleshooting:")
+    for i, r in enumerate(repairs, start=1):
+        title = r.get("title", "Untitled Repair")
+        date = (r.get("date") or "").strip()
+        status = (r.get("status") or "").strip()
+        tags = r.get("tags") or []
+        extra = " • ".join([x for x in [date, status] if x])
+        tag_str = ", ".join(tags) if tags else ""
+        line = f"  {i}. {title}"
+        if extra:
+            line += f"  [{extra}]"
+        if tag_str:
+            line += f"  ({tag_str})"
+        print(line)
 
 
 def input_project():
     projects = load_projects()
 
-    print("\n=== New Project ===")
+    print("\n=== New Build ===")
     title = prompt("Title")
     status = normalize_status(prompt("Status (Complete / In Progress / Archived)", default="Complete"))
     alt = prompt("Image alt text (what’s in the photo)", default=title, optional=True)
@@ -296,6 +508,7 @@ def input_project():
 
     description = prompt_multiline("Description (you can type multiple lines)")
     bullets = prompt_bullets()
+    tags = prompt_tags()
 
     links = []
     add_link = prompt("Add a link? (y/n)", default="n", optional=True).lower()
@@ -313,99 +526,73 @@ def input_project():
     project = {
         "title": title,
         "status": status,
-        "image": image_rel,
+        "cover_image": image_rel,
+        "image": image_rel,      # legacy/backwards compat
+        "images": [],            # extra images optional later
         "alt": alt,
         "description": description,
         "bullets": bullets,
+        "tags": tags,            # <-- NEW: per-card tags for filtering
         "links": links,
         "created": datetime.now().isoformat(timespec="seconds"),
     }
 
     projects.insert(0, project)
     save_projects(projects)
+
+    # rebuild both pages
     rebuild_index_from_projects(projects)
-    print("\nAdded project and updated index.html ✅")
+    rebuild_repairs_page()
+    print("\nAdded build and updated index.html + repairs.html ✅")
 
 
-def edit_project():
+def input_repair():
+    repairs = load_repairs()
+
+    print("\n=== New Circuit Troubleshooting Entry ===")
+    title = prompt("Title (short)", default="Circuit Troubleshooting", optional=True)
+    date = prompt("Date (YYYY-MM-DD)", default=datetime.now().strftime("%Y-%m-%d"), optional=True)
+    status = prompt("Status (In Progress / Fixed / Monitoring)", default="Fixed", optional=True)
+
+    device = prompt("Device / Board", optional=True)
+    symptom = prompt_multiline("Symptom (multi-line)", default="")
+    diagnosis = prompt_multiline("Diagnosis (multi-line)", default="")
+    fix = prompt_multiline("Fix / What worked (multi-line)", default="")
+
+    add_photo = prompt("Add a photo? (y/n)", default="y", optional=True).lower()
+    image_rel = ""
+    alt = ""
+    if add_photo == "y":
+        image_path = prompt("Path to image file (drag/drop)")
+        image_rel = copy_image_into_site(image_path, title)
+        alt = prompt("Image alt text", default=title, optional=True)
+
+    notes = prompt_multiline("Extra notes (optional)", default="")
+    tags = prompt_tags()
+
+    entry = {
+        "title": title,
+        "date": date,
+        "status": status,
+        "device": device,
+        "symptom": symptom,
+        "diagnosis": diagnosis,
+        "fix": fix,
+        "image": image_rel,
+        "alt": alt,
+        "notes": notes,
+        "tags": tags,  # <-- NEW: per-card tags for filtering
+        "created": datetime.now().isoformat(timespec="seconds"),
+    }
+
+    repairs.insert(0, entry)
+    save_repairs(repairs)
+
+    # rebuild both pages
     projects = load_projects()
-    if not projects:
-        print("No projects to edit.")
-        return
-
-    list_projects(projects)
-    choice = prompt("\nWhich project number to edit")
-    if not choice.isdigit():
-        print("Please enter a number.")
-        return
-    idx = int(choice) - 1
-    if idx < 0 or idx >= len(projects):
-        print("Invalid project number.")
-        return
-
-    p = projects[idx]
-    print(f"\n=== Editing: {p.get('title','Untitled')} ===")
-
-    p["title"] = prompt("Title", default=p.get("title", ""))
-    p["status"] = normalize_status(
-        prompt("Status (Complete / In Progress / Archived)", default=p.get("status", "Complete"))
-    )
-    p["alt"] = prompt("Image alt text", default=p.get("alt", p["title"]), optional=True)
-
-    replace = prompt("Replace image? (y/n)", default="n", optional=True).lower()
-    if replace == "y":
-        image_path = prompt("Path to new image (drag/drop)")
-        p["image"] = copy_image_into_site(image_path, p["title"])
-
-    p["description"] = prompt_multiline("Description", default=p.get("description", ""))
-    p["bullets"] = prompt_bullets(default_list=p.get("bullets", []))
-
-    print("\nLinks (leave blank to remove).")
-    links = []
-    l1_label = prompt("Link 1 label", default="Photos", optional=True)
-    l1_url = prompt("Link 1 url", default="", optional=True)
-    if l1_url.strip():
-        links.append({"label": l1_label or "Link", "url": l1_url.strip()})
-
-    l2_label = prompt("Link 2 label", default="Video", optional=True)
-    l2_url = prompt("Link 2 url", default="", optional=True)
-    if l2_url.strip():
-        links.append({"label": l2_label or "Link", "url": l2_url.strip()})
-
-    p["links"] = links
-    p["updated"] = datetime.now().isoformat(timespec="seconds")
-
-    save_projects(projects)
     rebuild_index_from_projects(projects)
-    print("\nSaved changes and updated index.html ✅")
-
-
-def delete_project():
-    projects = load_projects()
-    if not projects:
-        print("No projects to delete.")
-        return
-
-    list_projects(projects)
-    choice = prompt("\nWhich project number to DELETE")
-    if not choice.isdigit():
-        print("Please enter a number.")
-        return
-    idx = int(choice) - 1
-    if idx < 0 or idx >= len(projects):
-        print("Invalid project number.")
-        return
-
-    title = projects[idx].get("title", "Untitled")
-    confirm = prompt(f"Type DELETE to confirm deleting '{title}'")
-    if confirm != "DELETE":
-        print("Cancelled.")
-        return
-
-    projects.pop(idx)
-    save_projects(projects)
-    rebuild_index_from_projects(projects)
-    print("\nDeleted project and updated index.html ✅")
+    rebuild_repairs_page()
+    print("\nAdded troubleshooting entry and updated repairs.html ✅")
 
 
 def edit_site():
@@ -420,53 +607,45 @@ def edit_site():
     site["instagram_url"] = prompt("Instagram URL", default=site.get("instagram_url", ""))
     site["youtube_url"] = prompt("YouTube URL", default=site.get("youtube_url", ""))
 
-    print("\nTags (press Enter on blank line to finish).")
-    if site.get("tags"):
-        print("Current tags:")
-        for t in site["tags"]:
-            print(f"  - {t}")
-
-    new_tags = []
-    while True:
-        t = input("  - ").strip()
-        if t == "":
-            break
-        new_tags.append(t)
-    if new_tags:
-        site["tags"] = new_tags
+    print("\nAbout tags (these show in the About section).")
+    site["tags"] = prompt_tags(default_list=site.get("tags", []))
 
     save_site(site)
 
+    # Rebuild both pages to apply placeholders/tags
     projects = load_projects()
     rebuild_index_from_projects(projects)
-    print("\nSaved site settings and updated index.html ✅")
+    rebuild_repairs_page()
+    print("\nSaved site settings and updated index.html + repairs.html ✅")
 
 
 def main():
     print("\nCommands:")
-    print("  1) input-project   (add new)")
-    print("  2) edit-project    (edit existing)")
-    print("  3) delete-project  (remove)")
-    print("  4) list-projects   (show list)")
-    print("  5) rebuild         (regenerate index.html)")
+    print("  1) input-project   (add new build)")
+    print("  4) list-projects   (show builds list)")
+    print("  5) rebuild         (regenerate index.html + repairs.html)")
     print("  6) edit-site       (name, about, contact, tags)")
+    print("  7) input-repair    (add troubleshooting entry)")
+    print("  8) list-repairs    (show troubleshooting list)")
 
     cmd = prompt("\nEnter command").lower().strip()
     projects = load_projects()
+    repairs = load_repairs()
 
     if cmd in ["1", "input-project", "add", "new"]:
         input_project()
-    elif cmd in ["2", "edit-project", "edit"]:
-        edit_project()
-    elif cmd in ["3", "delete-project", "delete", "remove"]:
-        delete_project()
     elif cmd in ["4", "list-projects", "list"]:
         list_projects(projects)
     elif cmd in ["5", "rebuild", "build"]:
         rebuild_index_from_projects(projects)
-        print("\nRebuilt index.html ✅")
+        rebuild_repairs_page()
+        print("\nRebuilt index.html + repairs.html ✅")
     elif cmd in ["6", "edit-site", "site"]:
         edit_site()
+    elif cmd in ["7", "input-repair", "repair", "new-repair"]:
+        input_repair()
+    elif cmd in ["8", "list-repairs", "repairs", "list-repair"]:
+        list_repairs(repairs)
     else:
         print("Unknown command.")
 

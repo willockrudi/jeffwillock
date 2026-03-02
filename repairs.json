@@ -1,5 +1,23 @@
 [
   {
+    "title": "Acoustic Neck Repair",
+    "date": "2026-03-02",
+    "status": "Fixed",
+    "device": "Yamaha 0909",
+    "symptom": "Head broke off. Glue back and sanded and repainted",
+    "diagnosis": "repaired with love",
+    "fix": "",
+    "image": "images/2026-03-02-acoustic-neck-repair.png",
+    "alt": "acoustic",
+    "notes": "",
+    "tags": [
+      "acoustic",
+      "repair",
+      "neck repair"
+    ],
+    "created": "2026-03-02T11:00:56"
+  },
+  {
     "title": "loadstar audio gen",
     "date": "2016-02-25",
     "status": "Fixed",
@@ -10,7 +28,12 @@
     "image": "",
     "alt": "",
     "notes": "tech bench audio gen",
-    "tags": ["audio", "power", "zener", "diagnostics"],
+    "tags": [
+      "audio",
+      "power",
+      "zener",
+      "diagnostics"
+    ],
     "created": "2026-03-01T20:38:17"
   }
 ]

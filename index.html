@@ -14,7 +14,6 @@
 
     <div class="quick">
       <a href="#builds">Builds</a>
-      <a href="repairs.html">Troubleshooting</a>
       <a href="#about">About</a>
       <a href="#contact">Contact</a>
     </div>
@@ -24,31 +23,9 @@
 
     <section id="builds" class="projects">
       <h2>Build Log</h2>
-      <p class="section-note">Projects, builds, prototypes, and experiments.</p>
+      <p class="section-note">note</p>
 
       <!-- PROJECTS_START -->
-
-      <div class="project-card">
-        <img src="images/2026-03-01-d.png" alt="d">
-        <div class="project-info">
-          <h3>d <span class="status-badge status-complete">✅ Complete</span></h3>
-          <p>dfg</p>
-          <ul class="bullets">
-            <li>dfg</li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="project-card">
-        <img src="images/2026-03-01-a.png" alt="a">
-        <div class="project-info">
-          <h3>a <span class="status-badge status-complete">✅ Complete</span></h3>
-          <p>a</p>
-          <ul class="bullets">
-            <li>a</li>
-          </ul>
-        </div>
-      </div>
 
       <div class="project-card">
         <img src="images/2026-03-01-boat.png" alt="test">
@@ -78,6 +55,9 @@
     <section id="contact" class="contact">
       <h2>Contact</h2>
       <p>Email: <a href="mailto:rudiwillockmakes@gmail.com">rudiwillockmakes@gmail.com</a></p>
+      <p class="muted">
+        Optional: link an Instagram/YouTube for build videos — those help a ton for hands-on work.
+      </p>
 
       <div class="links">
         <a href="none yet" target="_blank" rel="noopener">Instagram</a>
@@ -93,18 +73,6 @@
 
   <script>
     document.getElementById("year").textContent = new Date().getFullYear();
-  </script>
-
-  <script>
-    document.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-gallery-toggle]");
-      if (!btn) return;
-      const id = btn.getAttribute("data-gallery-toggle");
-      const gallery = document.getElementById(id);
-      if (!gallery) return;
-      const open = gallery.classList.toggle("is-open");
-      btn.textContent = open ? "Hide photos" : "More photos";
-    });
   </script>
 
 </body>

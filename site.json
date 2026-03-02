@@ -1,10 +1,19 @@
 {
-  "name": "Your Name",
-  "tagline": "Electronics • Fabrication • Mechanisms • Custom Builds",
-  "build_log_note": "A running collection of things I’ve built, repaired, and engineered — from electronics to mechanical systems.",
-  "about_text": "I build custom physical projects — electronics, mechanisms, repairs, and one-off inventions. I’m comfortable taking a concept to a working build: planning, sourcing, fabrication, wiring, and troubleshooting.",
-  "email": "you@email.com",
-  "instagram_url": "https://instagram.com/yourhandle",
-  "youtube_url": "https://youtube.com/@yourhandle",
-  "tags": ["Electronics", "Fabrication", "Mechanisms", "Motor/Drive Systems", "Repair", "Prototyping"]
+  "name": "Jeff Willock Custom",
+  "tagline": "Custom Guitars & Expert Repair - Built to be Played",
+  "build_log_note": "From the Bench",
+  "about_text": "I’m a dedicated guitar builder and repair specialist focused on tone, playability, and craftsmanship.",
+  "email": "willockcustomguitars@gmail.com",
+  "instagram_url": "none",
+  "youtube_url": "none",
+  "tags": [
+    "custom build",
+    "repair",
+    "restoration",
+    "acoustic",
+    "refret",
+    "pickup install",
+    "setup",
+    "prototype"
+  ]
 }

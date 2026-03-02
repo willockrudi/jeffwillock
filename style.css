@@ -60,6 +60,33 @@ header {
 .status-progress{ background:#fff4e5; color:#663c00; }
 .status-archived{ background:#e8eaed; color:#3c4043; }
 
+.gallery-toggle{
+  display:inline-block;
+  margin-top:0.5rem;
+  padding:0.35rem 0.7rem;
+  border-radius:8px;
+  border:1px solid rgba(0,0,0,0.15);
+  background:transparent;
+  cursor:pointer;
+  font:inherit;
+}
+
+.gallery{
+  margin-top:0.75rem;
+  display:none;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.gallery.is-open{ display:flex; }
+
+.gallery img{
+  width:160px;
+  height:110px;
+  object-fit:cover;
+  border-radius:10px;
+  border:1px solid rgba(0,0,0,0.10);
+}
 
 .project-card {
   background: #fff;

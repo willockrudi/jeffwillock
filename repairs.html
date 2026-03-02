@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rudi Willock | Circuit Troubleshooting</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="container">
+    <h1>Rudi Willock</h1>
+    <p class="subtitle">Maker</p>
+
+    <div class="quick">
+      <a href="index.html#builds">Builds</a>
+      <a href="#repairs">Troubleshooting</a>
+      <a href="index.html#about">About</a>
+      <a href="index.html#contact">Contact</a>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <section id="repairs" class="projects">
+      <h2>Circuit Troubleshooting Log</h2>
+      <p class="section-note">
+        Diagnostics, fault isolation, and repair documentation.
+      </p>
+
+      <!-- REPAIRS_START -->
+
+      <div class="project-card">
+        
+        <div class="project-info">
+          <h3>loadstar audio gen</h3>
+          <p class="muted">2016-02-25 • fixed</p>
+          <p><strong>Device:</strong> bad zener</p>
+          <p><strong>Symptom:</strong> no audio</p>
+          <p><strong>Diagnosis:</strong> no bias replaced zener 43v 1w</p>
+          <p><strong>Fix:</strong> replaced diode and cleaned switches</p>
+          <p>tech bench audio gen</p>
+        </div>
+      </div>
+<!-- REPAIRS_END -->
+    </section>
+
+  </main>
+
+  <footer class="container footer">
+    <p>© <span id="year"></span> Rudi Willock</p>
+  </footer>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
+
+</body>
+</html>

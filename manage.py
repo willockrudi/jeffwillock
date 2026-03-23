@@ -365,7 +365,7 @@ def _web_layout(title: str, body: str, message: str = "") -> str:
 </head>
 <body>
   <div class="wrap">
-    <h1>RudiMakes Admin</h1>
+    <h1>jeffwillock Admin</h1>
     <p class="muted">Web UI for projects, repairs, rebuild, and publish.</p>
     {message_html}
     {body}
@@ -495,7 +495,7 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
   </div>
 </div>
 """
-            self._send_html(_web_layout("RudiMakes Admin", body, message))
+            self._send_html(_web_layout("jeffwillock Admin", body, message))
 
         def _render_story(self, idx: int, message: str = ""):
             projects = load_projects()

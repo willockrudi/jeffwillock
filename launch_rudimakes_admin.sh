@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKDIR="/home/rudi/Documents/rudimakes"
-PYTHON_BIN="/home/rudi/Documents/rudimakes/.venv/bin/python"
-LOG_FILE="/tmp/rudimakes-admin.log"
+WORKDIR="/home/rudi/Documents/jeffwillock"
+PYTHON_BIN="/home/rudi/Documents/jeffwillock/.venv/bin/python"
+LOG_FILE="/tmp/jeffwillock-admin.log"
 HOST="127.0.0.1"
 PORT="8081"
 

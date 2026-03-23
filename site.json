@@ -1,10 +1,10 @@
 {
-  "name": "Rudi Willock",
-  "tagline": "[Electronics • Fabrication • Custom Builds]",
-  "build_log_note": "A running collection of things I’ve built, repaired, and engineered — from electronics to mechanical systems.",
-  "about_text": "I build custom physical projects — electronics, mechanisms, repairs, and one-off inventions. I’m comfortable taking a concept to a working build: planning, sourcing, fabrication, wiring, and troubleshooting.",
-  "email": "rudiwillockmakes@gmail.com",
-  "instagram_url": "https://instagram.com/yourhandle",
-  "youtube_url": "https://youtube.com/@yourhandle",
-  "tags": []
+  "name": "Jeff Willock",
+  "tagline": "JC Custom Guitars",
+  "build_log_note": "A collection of guitars, repairs, and work from the bench.",
+  "about_text": "I’ve been playing music my whole life — guitar, drums, and anything I could get my hands on. Years of playing, fixing, sanding, and working on instruments led me to building guitars. This is a place to share my builds, my work, and the instruments I make. Made for you.",
+  "email": "",
+  "instagram_url": "",
+  "youtube_url": "",
+  "tags": ["guitars", "repairs", "custom", "builds"]
 }

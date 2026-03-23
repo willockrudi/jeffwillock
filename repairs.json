@@ -1,22 +1,56 @@
-[
-  {
-    "title": "loadstar audio gen",
-    "date": "2016-02-25",
-    "status": "Fixed",
-    "device": "bad zener",
-    "symptom": "no audio",
-    "diagnosis": "no bias replaced zener 43v 1w boobs\r\n",
-    "fix": "replaced diode and cleaned switches",
-    "image": "images/2026-03-15-loadstar-audio-gen.svg",
-    "alt": "Test photo",
-    "notes": "tech bench audio gen",
-    "tags": [
-      "audio",
-      "power",
-      "zener",
-      "diagnostics"
-    ],
-    "created": "2026-03-01T20:38:17",
-    "updated": "2026-03-15T23:49:34"
-  }
-]
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Repairs | JC Custom Guitars</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <nav>
+    <div class="nav-inner">
+      <a class="nav-logo" href="index.html">JC<span>Custom</span></a>
+      <ul id="navMenu">
+        <li><a href="index.html#builds">Builds</a></li>
+        <li><a href="repairs.html" class="active">Repairs</a></li>
+        <li><a href="index.html#about">About</a></li>
+        <li><a href="index.html#contact">Contact</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="container">
+      <p class="hero-eyebrow">From The Bench</p>
+      <h1 class="hero-title">Repairs & Restorations</h1>
+      <p class="hero-bio">
+        Setups, repairs, refinishes, part swaps, and getting instruments back
+        to the way they should play and sound.
+        <br><br>
+        Years of working on guitars and instruments of all kinds.
+      </p>
+    </div>
+  </section>
+
+  <main>
+    <section class="section">
+      <div class="container">
+        <!-- REPAIRS_START -->
+        <!-- REPAIRS_END -->
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>© <span id="year"></span> Jeff Willock</p>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
+
+</body>
+</html>

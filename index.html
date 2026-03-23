@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JC Custom Guitars | Jeff Willock</title>
+  <title>Jeff Willock | JC Custom Guitars</title>
   <link rel="stylesheet" href="style.css" />
   <script>
     (function () {
@@ -35,11 +35,10 @@
     <div class="container">
       <p class="hero-eyebrow">JC Custom Guitars</p>
       <h1 class="hero-title">Jeff Willock</h1>
-      <p class="hero-subtitle">Custom Guitars • Built By Hand</p>
+      <p class="hero-subtitle">JC Custom Guitars</p>
       <p class="hero-bio">
-        I build custom guitars and work on instruments from the bench — shaping, sanding,
-        finishing, repairing, and putting guitars together the way they should be.
-        This site is a place to share the builds and the work.
+        Custom guitars, repairs, refinishes, part swaps, and work from the bench.
+        This site is where I share the builds and the instruments I make.
         <br><br>
         Made for you.
       </p>
@@ -56,7 +55,7 @@
         <div class="section-header">
           <p class="section-label">The Builds</p>
           <h2 class="section-title">Custom Guitars</h2>
-          <p class="section-note">A collection of guitars and projects from the bench.</p>
+          <p class="section-note">A collection of guitars, repairs, and work from the bench.</p>
         </div>
 
         <div class="filter-bar">
@@ -65,7 +64,65 @@
         </div>
 
         <!-- PROJECTS_START -->
-        <!-- PROJECTS_END -->
+
+      <div class="project-card" data-tags="prototype">
+        <img class="project-thumb" src="images/test-photo.svg" alt="d">
+        <div class="project-info">
+          <h3>d <span class="status-badge status-complete">✅ Complete</span></h3>
+          <p>dfg</p>
+          <div class="card-tags">
+            <span class="tag-chip">prototype</span>
+          </div>
+          <a class="project-open" href="projects/d.html">Open project</a>
+          <ul class="bullets">
+            <li>dfg</li>
+          </ul>
+          <button class="gallery-toggle" type="button" data-gallery-toggle="gallery-d-90543">More photos</button>
+          <div class="gallery" id="gallery-d-90543">
+            <img src="images/test-photo.svg" alt="d">
+          </div>
+        </div>
+      </div>
+
+      <div class="project-card" data-tags="fabrication">
+        <img class="project-thumb" src="images/test-photo.svg" alt="a">
+        <div class="project-info">
+          <h3>a <span class="status-badge status-complete">✅ Complete</span></h3>
+          <p>a</p>
+          <div class="card-tags">
+            <span class="tag-chip">fabrication</span>
+          </div>
+          <a class="project-open" href="projects/a.html">Open project</a>
+          <ul class="bullets">
+            <li>a</li>
+          </ul>
+          <button class="gallery-toggle" type="button" data-gallery-toggle="gallery-a-90543">More photos</button>
+          <div class="gallery" id="gallery-a-90543">
+            <img src="images/test-photo.svg" alt="a">
+          </div>
+        </div>
+      </div>
+
+      <div class="project-card" data-tags="marine,build">
+        <img class="project-thumb" src="images/test-photo.svg" alt="test">
+        <div class="project-info">
+          <h3>test <span class="status-badge status-complete">✅ Complete</span></h3>
+          <p>testy test</p>
+          <div class="card-tags">
+            <span class="tag-chip">marine</span>
+            <span class="tag-chip">build</span>
+          </div>
+          <a class="project-open" href="projects/test.html">Open project</a>
+          <ul class="bullets">
+            <li>still cool</li>
+          </ul>
+          <button class="gallery-toggle" type="button" data-gallery-toggle="gallery-test-90543">More photos</button>
+          <div class="gallery" id="gallery-test-90543">
+            <img src="images/test-photo.svg" alt="test">
+          </div>
+        </div>
+      </div>
+<!-- PROJECTS_END -->
       </div>
     </section>
 
@@ -75,15 +132,15 @@
           <p class="section-label">About</p>
           <h2 class="section-title">About</h2>
         </div>
-        <p>
-          I’ve spent years working on guitars — repairs, refinishes, setups, part swaps,
-          and full builds. Over time that turned into building custom guitars and doing
-          all kinds of work from the bench.
-          <br><br>
-          This site is where I share the work and the guitars I build.
-          <br><br>
-          Made for you.
-        </p>
+        <p>I’ve been playing music my whole life — guitar, drums, and anything I could get my hands on. Years of playing, fixing, sanding, and working on instruments led me to building guitars. This is a place to share my builds, my work, and the instruments I make. Made for you.</p>
+        <div class="tags">
+          <!-- TAGS_START -->
+        <span>guitars</span>
+        <span>repairs</span>
+        <span>custom</span>
+        <span>builds</span>
+      <!-- TAGS_END -->
+        </div>
       </div>
     </section>
 
@@ -97,7 +154,12 @@
           If you’re looking for a guitar, need work done, or have an idea for a build,
           feel free to reach out.
         </p>
-        <p>Email: <a href="mailto:jeffwillock@yahoo.com">jeffwillock@yahoo.com</a></p>
+        <p>Email: <a href="mailto:"></a></p>
+
+        <div class="social-links">
+          <a href="" target="_blank" rel="noopener" class="social-link">Instagram</a>
+          <a href="" target="_blank" rel="noopener" class="social-link">YouTube</a>
+        </div>
       </div>
     </section>
   </main>
@@ -120,10 +182,10 @@
       function setTheme(mode) {
         if (mode === "light") {
           root.setAttribute("data-theme", "light");
-          btn.textContent = "Dark Mode";
+          if (btn) btn.textContent = "Dark Mode";
         } else {
           root.removeAttribute("data-theme");
-          btn.textContent = "Light Mode";
+          if (btn) btn.textContent = "Light Mode";
         }
       }
 
@@ -131,12 +193,14 @@
       try { saved = localStorage.getItem("theme"); } catch (e) {}
       setTheme(saved === "light" ? "light" : "dark");
 
-      btn.addEventListener("click", () => {
-        const isLight = root.getAttribute("data-theme") === "light";
-        const next = isLight ? "dark" : "light";
-        try { localStorage.setItem("theme", next); } catch (e) {}
-        setTheme(next);
-      });
+      if (btn) {
+        btn.addEventListener("click", () => {
+          const isLight = root.getAttribute("data-theme") === "light";
+          const next = isLight ? "dark" : "light";
+          try { localStorage.setItem("theme", next); } catch (e) {}
+          setTheme(next);
+        });
+      }
     })();
   </script>
 
@@ -193,5 +257,6 @@
       search.addEventListener("input", apply);
     })();
   </script>
+
 </body>
 </html>

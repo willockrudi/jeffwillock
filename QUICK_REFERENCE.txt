@@ -1,0 +1,46 @@
+╔══════════════════════════════════════════════════════════════╗
+║                   🎸 JC CUSTOM GUITARS                        ║
+║                     QUICK REFERENCE                           ║
+╠══════════════════════════════════════════════════════════════╣
+║                                                               ║
+║  📷 TAKING PHOTOS & VIDEOS                                    ║
+║  ─────────────────────────────                               ║
+║  Just use your iPhone camera normally!                        ║
+║  Photos automatically upload to the cloud.                    ║
+║                                                               ║
+║                                                               ║
+║  🖥️  OPENING THE ADMIN                                        ║
+║  ──────────────────────                                       ║
+║  Double-click "JC Custom Guitars" on the Desktop              ║
+║  Browser opens automatically                                  ║
+║                                                               ║
+║                                                               ║
+║  📁 ORGANIZING PHOTOS                                         ║
+║  ────────────────────                                         ║
+║  1. Open admin                                                ║
+║  2. Click "New Build" → give it a name                        ║
+║  3. Drag photos into the build folder in Finder               ║
+║     (find it in Google Drive → JC Custom Guitars)             ║
+║                                                               ║
+║                                                               ║
+║  🌐 PUBLISHING TO WEBSITE                                     ║
+║  ────────────────────────                                     ║
+║  1. Open admin                                                ║
+║  2. Click "Edit" on a build                                   ║
+║  3. Pick a cover photo, add description                       ║
+║  4. Click "Save"                                              ║
+║  5. Click "Publish" on main page                              ║
+║                                                               ║
+║                                                               ║
+║  ❓ PROBLEMS?                                                  ║
+║  ───────────                                                  ║
+║  Call: _________________________ (your number)                ║
+║                                                               ║
+║  If app doesn't open:                                         ║
+║  → Make sure computer is connected to internet                ║
+║  → Try double-clicking the app again                          ║
+║  → Restart the computer                                       ║
+║                                                               ║
+╚══════════════════════════════════════════════════════════════╝
+
+Print this and keep it near the computer!

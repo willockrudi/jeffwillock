@@ -6,9 +6,12 @@ import shutil
 import html
 import subprocess
 import sys
+import mimetypes
+import cgi
+import io
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse, unquote
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -31,6 +34,10 @@ SITE_PATH = os.path.join(ROOT, "site.json")
 IMAGES_DIR = os.path.join(ROOT, "images")
 BACKUPS_DIR = os.path.join(ROOT, ".backups")
 
+# Photo inbox - where Google Drive syncs photos to
+# This can be overridden in site.json with "photo_inbox" key
+DEFAULT_PHOTO_INBOX = os.path.expanduser("~/Google Drive/Guitar Photos")
+
 # Markers
 PROJECTS_START = "<!-- PROJECTS_START -->"
 PROJECTS_END = "<!-- PROJECTS_END -->"
@@ -41,18 +48,75 @@ TAGS_END = "<!-- TAGS_END -->"
 PROJECT_STEPS_START = "<!-- PROJECT_STEPS_START -->"
 PROJECT_STEPS_END = "<!-- PROJECT_STEPS_END -->"
 
-# Guitar portfolio
-GUITARS_PATH = os.path.join(ROOT, "guitars.json")
-GUITAR_TEMPLATE_PATH = os.path.join(ROOT, "guitar_template.html")
-GUITARS_TEMPLATE_PATH = os.path.join(ROOT, "guitars_template.html")
-GUITARS_INDEX_PATH = os.path.join(ROOT, "guitars.html")
-GUITARS_DIR = os.path.join(ROOT, "guitars")
 
-# Guitar markers
-GUITARS_START = "<!-- GUITARS_START -->"
-GUITARS_END = "<!-- GUITARS_END -->"
-GUITAR_STEPS_START = "<!-- GUITAR_STEPS_START -->"
-GUITAR_STEPS_END = "<!-- GUITAR_STEPS_END -->"
+def get_photo_inbox_dir() -> str:
+    """Get the photo inbox directory from site.json or use default."""
+    site = load_site()
+    inbox = site.get("photo_inbox", "").strip()
+    if inbox and os.path.isdir(inbox):
+        return inbox
+    # Try common locations
+    candidates = [
+        DEFAULT_PHOTO_INBOX,
+        os.path.expanduser("~/Google Drive/Photos"),
+        os.path.expanduser("~/Pictures/Guitar Photos"),
+        os.path.expanduser("~/Pictures"),
+        IMAGES_DIR,
+    ]
+    for path in candidates:
+        if os.path.isdir(path):
+            return path
+    return IMAGES_DIR
+
+
+def list_inbox_photos() -> list[dict]:
+    """List all photos in the inbox folder, sorted newest first."""
+    inbox = get_photo_inbox_dir()
+    if not os.path.isdir(inbox):
+        return []
+    
+    extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.heic'}
+    photos = []
+    
+    try:
+        for name in os.listdir(inbox):
+            ext = os.path.splitext(name)[1].lower()
+            if ext in extensions:
+                full_path = os.path.join(inbox, name)
+                if os.path.isfile(full_path):
+                    stat = os.stat(full_path)
+                    photos.append({
+                        "name": name,
+                        "path": full_path,
+                        "size": stat.st_size,
+                        "mtime": stat.st_mtime,
+                        "source": "inbox"
+                    })
+    except PermissionError:
+        pass
+    
+    # Also include photos already in the images folder
+    if os.path.isdir(IMAGES_DIR) and IMAGES_DIR != inbox:
+        try:
+            for name in os.listdir(IMAGES_DIR):
+                ext = os.path.splitext(name)[1].lower()
+                if ext in extensions:
+                    full_path = os.path.join(IMAGES_DIR, name)
+                    if os.path.isfile(full_path):
+                        stat = os.stat(full_path)
+                        photos.append({
+                            "name": name,
+                            "path": full_path,
+                            "size": stat.st_size,
+                            "mtime": stat.st_mtime,
+                            "source": "images"
+                        })
+        except PermissionError:
+            pass
+    
+    # Sort by modification time, newest first
+    photos.sort(key=lambda x: x["mtime"], reverse=True)
+    return photos
 
 
 # ---------- Data IO ----------
@@ -74,7 +138,7 @@ def _save_json(path: str, obj):
 
 
 def _data_files() -> list[str]:
-    return [DATA_PATH, REPAIRS_PATH, SITE_PATH, GUITARS_PATH]
+    return [DATA_PATH, REPAIRS_PATH, SITE_PATH]
 
 
 def create_backup(label: str) -> str:
@@ -347,7 +411,7 @@ def resolve_image_input(image_value: str, title: str) -> str:
 def _web_layout(title: str, body: str, message: str = "") -> str:
     message_html = ""
     if message:
-        message_html = f'<p style="padding:10px;border-radius:8px;background:#eef6ff;border:1px solid #c7ddff;">{html.escape(message)}</p>'
+        message_html = f'<p style="padding:14px 18px;border-radius:12px;background:#d1fae5;border:1px solid #6ee7b7;color:#065f46;font-size:15px;margin-bottom:16px;">{html.escape(message)}</p>'
 
     return f"""
 <!doctype html>
@@ -357,29 +421,75 @@ def _web_layout(title: str, body: str, message: str = "") -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{html.escape(title)}</title>
   <style>
-    body {{ font-family: Arial, Helvetica, sans-serif; margin: 0; background: #f5f6f8; color: #1f2937; }}
-    .wrap {{ max-width: 1100px; margin: 0 auto; padding: 20px; }}
-    .grid {{ display: grid; grid-template-columns: repeat(auto-fit,minmax(320px,1fr)); gap: 16px; }}
-    .card {{ background: white; border-radius: 12px; padding: 16px; box-shadow: 0 4px 14px rgba(0,0,0,0.06); }}
-    h1,h2,h3 {{ margin: 0 0 12px; }}
-    label {{ display: block; margin: 8px 0 4px; font-size: 14px; color: #374151; }}
-    input,textarea,select {{ width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; }}
-    textarea {{ min-height: 90px; }}
-    button {{ margin-top: 10px; border: none; background: #2563eb; color: white; padding: 10px 12px; border-radius: 8px; cursor: pointer; }}
-    button.alt {{ background: #4b5563; }}
-    button.warn {{ background: #dc2626; }}
+    * {{ box-sizing: border-box; }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; background: #f8fafc; color: #1e293b; }}
+    .wrap {{ max-width: 1200px; margin: 0 auto; padding: 16px; }}
+    .header {{ background: linear-gradient(135deg, #1e40af 0%, #7c3aed 100%); color: white; padding: 24px 20px; margin: -16px -16px 20px; border-radius: 0 0 20px 20px; }}
+    .header h1 {{ margin: 0 0 4px; font-size: 24px; }}
+    .header p {{ margin: 0; opacity: 0.9; font-size: 14px; }}
+    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }}
+    .card {{ background: white; border-radius: 16px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+    .card h2 {{ margin: 0 0 16px; font-size: 18px; color: #1e40af; display: flex; align-items: center; gap: 8px; }}
+    .card h3 {{ margin: 0 0 12px; font-size: 16px; }}
+    label {{ display: block; margin: 12px 0 6px; font-size: 14px; font-weight: 600; color: #475569; }}
+    input, textarea, select {{ width: 100%; padding: 12px 14px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 16px; transition: border-color 0.2s; }}
+    input:focus, textarea:focus, select:focus {{ outline: none; border-color: #3b82f6; }}
+    textarea {{ min-height: 100px; resize: vertical; }}
+    button {{ margin-top: 12px; border: none; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; padding: 14px 20px; border-radius: 10px; cursor: pointer; font-size: 16px; font-weight: 600; width: 100%; transition: transform 0.1s, box-shadow 0.2s; }}
+    button:hover {{ transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59,130,246,0.4); }}
+    button:active {{ transform: translateY(0); }}
+    button.secondary {{ background: #64748b; }}
+    button.warn {{ background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }}
+    button.small {{ padding: 8px 14px; font-size: 14px; width: auto; margin: 4px; }}
     .row {{ display: flex; gap: 8px; flex-wrap: wrap; }}
-    .row form {{ margin: 0; }}
-    .list {{ margin: 0; padding-left: 18px; }}
-    .muted {{ color: #6b7280; font-size: 13px; }}
-    a {{ color: #2563eb; text-decoration: none; }}
+    .row form {{ margin: 0; flex: 1; min-width: 140px; }}
+    .list {{ margin: 0; padding: 0; list-style: none; }}
+    .list li {{ padding: 12px; margin: 8px 0; background: #f8fafc; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }}
+    .list li strong {{ flex: 1; min-width: 150px; }}
+    .muted {{ color: #64748b; font-size: 13px; }}
+    a {{ color: #2563eb; text-decoration: none; font-weight: 500; }}
     a:hover {{ text-decoration: underline; }}
+    
+    /* Photo picker styles */
+    .photo-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin: 12px 0; max-height: 400px; overflow-y: auto; padding: 4px; }}
+    .photo-item {{ position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; cursor: pointer; border: 3px solid transparent; transition: all 0.2s; }}
+    .photo-item:hover {{ transform: scale(1.05); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }}
+    .photo-item.selected {{ border-color: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.3); }}
+    .photo-item img {{ width: 100%; height: 100%; object-fit: cover; }}
+    .photo-item .check {{ position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; background: #22c55e; border-radius: 50%; display: none; align-items: center; justify-content: center; color: white; font-size: 14px; }}
+    .photo-item.selected .check {{ display: flex; }}
+    .photo-actions {{ margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0; }}
+    
+    /* Upload area */
+    .upload-area {{ border: 2px dashed #cbd5e1; border-radius: 12px; padding: 30px 20px; text-align: center; cursor: pointer; transition: all 0.2s; background: #f8fafc; }}
+    .upload-area:hover {{ border-color: #3b82f6; background: #eff6ff; }}
+    .upload-area.dragover {{ border-color: #22c55e; background: #f0fdf4; }}
+    .upload-area input {{ display: none; }}
+    .upload-area .icon {{ font-size: 40px; margin-bottom: 10px; }}
+    .upload-area p {{ margin: 0; color: #64748b; }}
+    
+    /* Empty state */
+    .empty-state {{ text-align: center; padding: 40px 20px; color: #64748b; }}
+    .empty-state .icon {{ font-size: 50px; margin-bottom: 16px; opacity: 0.5; }}
+    
+    /* Status badges */
+    .badge {{ display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }}
+    .badge-complete {{ background: #d1fae5; color: #065f46; }}
+    .badge-progress {{ background: #fef3c7; color: #92400e; }}
+    
+    @media (max-width: 600px) {{
+      .grid {{ grid-template-columns: 1fr; }}
+      .photo-grid {{ grid-template-columns: repeat(3, 1fr); }}
+      .list li {{ flex-direction: column; align-items: flex-start; }}
+    }}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>jeffwillock Admin</h1>
-    <p class="muted">Web UI for projects, repairs, rebuild, and publish.</p>
+    <div class="header">
+      <h1>🎸 JC Custom Admin</h1>
+      <p>Manage your guitar builds and repairs</p>
+    </div>
     {message_html}
     {body}
   </div>
@@ -388,8 +498,122 @@ def _web_layout(title: str, body: str, message: str = "") -> str:
 """.strip()
 
 
+def _photo_picker_html(field_name: str, current_value: str = "", multi: bool = False) -> str:
+    """Generate HTML for a visual photo picker."""
+    photos = list_inbox_photos()
+    inbox_path = get_photo_inbox_dir()
+    
+    if not photos:
+        return f"""
+<div class="empty-state">
+  <div class="icon">📷</div>
+  <p>No photos found</p>
+  <p class="muted">Photos will appear here from:<br><code>{html.escape(inbox_path)}</code></p>
+</div>
+<label>Or enter image path/URL manually:</label>
+<input type="text" name="{field_name}" value="{html.escape(current_value)}" placeholder="images/photo.jpg or https://...">
+"""
+    
+    photo_items = ""
+    for photo in photos[:50]:  # Limit to 50 most recent
+        name = html.escape(photo["name"])
+        # URL encode the path for the src
+        encoded_path = photo["path"].replace("\\", "/")
+        is_selected = current_value and (photo["name"] in current_value or photo["path"] in current_value)
+        selected_class = "selected" if is_selected else ""
+        photo_items += f'''
+<div class="photo-item {selected_class}" data-path="{html.escape(photo['path'])}" data-name="{name}" onclick="selectPhoto(this, '{field_name}', {str(multi).lower()})">
+  <img src="/photo?path={html.escape(encoded_path)}" alt="{name}" loading="lazy">
+  <div class="check">✓</div>
+</div>
+'''
+    
+    multi_note = " (tap multiple)" if multi else ""
+    return f"""
+<label>Select Photo{multi_note}:</label>
+<p class="muted">Photos from: {html.escape(inbox_path)}</p>
+<div class="photo-grid" id="grid-{field_name}">
+{photo_items}
+</div>
+<input type="hidden" name="{field_name}" id="input-{field_name}" value="{html.escape(current_value)}">
+
+<div class="upload-area" onclick="document.getElementById('upload-{field_name}').click()" ondrop="handleDrop(event, '{field_name}')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+  <div class="icon">📤</div>
+  <p><strong>Tap to upload</strong> or drag photo here</p>
+  <input type="file" id="upload-{field_name}" accept="image/*" onchange="uploadPhoto(this, '{field_name}')">
+</div>
+
+<script>
+function selectPhoto(el, fieldName, multi) {{
+  if (multi) {{
+    el.classList.toggle('selected');
+    const selected = document.querySelectorAll('#grid-' + fieldName + ' .photo-item.selected');
+    const paths = Array.from(selected).map(p => p.dataset.path);
+    document.getElementById('input-' + fieldName).value = paths.join('\\n');
+  }} else {{
+    document.querySelectorAll('#grid-' + fieldName + ' .photo-item').forEach(p => p.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('input-' + fieldName).value = el.dataset.path;
+  }}
+}}
+
+function handleDragOver(e) {{
+  e.preventDefault();
+  e.currentTarget.classList.add('dragover');
+}}
+
+function handleDragLeave(e) {{
+  e.currentTarget.classList.remove('dragover');
+}}
+
+function handleDrop(e, fieldName) {{
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  const files = e.dataTransfer.files;
+  if (files.length > 0) {{
+    uploadFiles(files, fieldName);
+  }}
+}}
+
+function uploadPhoto(input, fieldName) {{
+  if (input.files.length > 0) {{
+    uploadFiles(input.files, fieldName);
+  }}
+}}
+
+function uploadFiles(files, fieldName) {{
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {{
+    formData.append('photos', files[i]);
+  }}
+  
+  fetch('/upload', {{
+    method: 'POST',
+    body: formData
+  }})
+  .then(r => r.json())
+  .then(data => {{
+    if (data.success && data.paths.length > 0) {{
+      // Reload page to show new photos
+      location.reload();
+    }} else {{
+      alert('Upload failed: ' + (data.error || 'Unknown error'));
+    }}
+  }})
+  .catch(err => alert('Upload error: ' + err));
+}}
+</script>
+"""
+
+
 def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
     def parse_form(handler: BaseHTTPRequestHandler) -> dict[str, str]:
+        content_type = handler.headers.get("Content-Type", "")
+        
+        # Handle multipart form data (file uploads)
+        if content_type.startswith("multipart/form-data"):
+            return {}  # Handled separately
+        
         length = int(handler.headers.get("Content-Length", "0") or "0")
         raw = handler.rfile.read(length).decode("utf-8") if length > 0 else ""
         parsed = parse_qs(raw, keep_blank_values=True)
@@ -404,6 +628,34 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
             self.end_headers()
             self.wfile.write(data)
 
+        def _send_json(self, obj: dict, status: int = 200):
+            data = json.dumps(obj).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def _send_image(self, path: str):
+            if not os.path.isfile(path):
+                self.send_error(404)
+                return
+            
+            mime, _ = mimetypes.guess_type(path)
+            mime = mime or "application/octet-stream"
+            
+            try:
+                with open(path, "rb") as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "max-age=3600")
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception:
+                self.send_error(500)
+
         def _redirect(self, path: str, msg: str = ""):
             target = path
             if msg:
@@ -415,147 +667,115 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
 
         def _render_home(self, message: str = ""):
             projects = load_projects()
-            repairs  = load_repairs()
-            guitars  = load_guitars()
-            site     = load_site()
+            repairs = load_repairs()
+            site = load_site()
+            inbox_path = get_photo_inbox_dir()
 
-            project_items = "\n".join([
-                f"<li><strong>{html.escape(p.get('title','Untitled'))}</strong> "
-                f"<span class='muted'>[{html.escape(p.get('status','Complete'))}]</span> "
-                f"<a href='/project/edit?idx={i}'>Edit</a> "
-                f"<a href='/story?idx={i}'>Story</a>"
-                f"<form method='post' action='/projects/delete' style='display:inline; margin-left:8px;'>"
-                f"<input type='hidden' name='idx' value='{i}' />"
-                f"<button class='warn' type='submit'>Delete</button></form></li>"
-                for i, p in enumerate(projects)
-            ]) or "<li class='muted'>No builds yet.</li>"
+            project_items = ""
+            for i, p in enumerate(projects):
+                status = p.get('status', 'Complete')
+                badge_class = "badge-complete" if status == "Complete" else "badge-progress"
+                project_items += f"""
+<li>
+  <strong>{html.escape(p.get('title','Untitled'))}</strong>
+  <span class="badge {badge_class}">{html.escape(status)}</span>
+  <div>
+    <a href='/project/edit?idx={i}'>Edit</a> · 
+    <a href='/story?idx={i}'>Story</a>
+    <form method='post' action='/projects/delete' style='display:inline;'>
+      <input type='hidden' name='idx' value='{i}'>
+      <button class='small warn' type='submit'>Delete</button>
+    </form>
+  </div>
+</li>
+"""
+            if not project_items:
+                project_items = "<li class='muted'>No builds yet. Add your first one below!</li>"
 
-            repair_items = "\n".join([
-                f"<li><strong>{html.escape(r.get('title','Untitled Repair'))}</strong>"
-                f" <a href='/repair/edit?idx={i}'>Edit</a>"
-                f"<form method='post' action='/repairs/delete' style='display:inline; margin-left:8px;'>"
-                f"<input type='hidden' name='idx' value='{i}' />"
-                f"<button class='warn' type='submit'>Delete</button></form></li>"
-                for i, r in enumerate(repairs)
-            ]) or "<li class='muted'>No repairs yet.</li>"
+            repair_items = ""
+            for i, r in enumerate(repairs):
+                repair_items += f"""
+<li>
+  <strong>{html.escape(r.get('title','Untitled'))}</strong>
+  <div>
+    <a href='/repair/edit?idx={i}'>Edit</a>
+    <form method='post' action='/repairs/delete' style='display:inline;'>
+      <input type='hidden' name='idx' value='{i}'>
+      <button class='small warn' type='submit'>Delete</button>
+    </form>
+  </div>
+</li>
+"""
+            if not repair_items:
+                repair_items = "<li class='muted'>No repairs yet.</li>"
 
-            guitar_items = "\n".join([
-                f"<li><strong>#{g.get('number','')} {html.escape(g.get('title','Untitled'))}</strong> "
-                f"<span class='muted'>[{html.escape(g.get('status',''))}]</span> "
-                f"<a href='/guitar/edit?idx={i}'>Edit</a> "
-                f"<a href='/guitar/story?idx={i}'>Story</a>"
-                f"<form method='post' action='/guitars/delete' style='display:inline; margin-left:8px;'>"
-                f"<input type='hidden' name='idx' value='{i}' />"
-                f"<button class='warn' type='submit'>Delete</button></form></li>"
-                for i, g in enumerate(guitars)
-            ]) or "<li class='muted'>No guitars yet.</li>"
+            # Photo picker for the add form
+            photo_picker = _photo_picker_html("image_path")
 
             body = f"""
 <div class='grid'>
   <div class='card'>
-    <h2>Site Actions</h2>
+    <h2>🚀 Quick Actions</h2>
     <div class='row'>
-      <form method='post' action='/actions/rebuild'><button type='submit'>Rebuild Site</button></form>
-      <form method='post' action='/actions/publish'>
-        <input type='text' name='commit_message' placeholder='Commit message (optional)' />
-        <button type='submit'>Publish GitHub</button>
-      </form>
+      <form method='post' action='/actions/rebuild'><button type='submit' class='secondary'>🔄 Rebuild Site</button></form>
+      <form method='post' action='/actions/publish'><button type='submit'>📤 Publish to GitHub</button></form>
     </div>
   </div>
 
   <div class='card'>
-    <h2>Edit Site Info</h2>
+    <h2>⚙️ Settings</h2>
     <form method='post' action='/site/save'>
-      <label>Name</label><input name='name' value='{html.escape(site.get('name',''))}' />
-      <label>Tagline</label><input name='tagline' value='{html.escape(site.get('tagline',''))}' />
-      <label>Build Note</label><input name='build_log_note' value='{html.escape(site.get('build_log_note',''))}' />
-      <label>About</label><textarea name='about_text'>{html.escape(site.get('about_text',''))}</textarea>
-      <label>Email</label><input name='email' value='{html.escape(site.get('email',''))}' />
-      <label>Instagram URL</label><input name='instagram_url' value='{html.escape(site.get('instagram_url',''))}' />
-      <label>YouTube URL</label><input name='youtube_url' value='{html.escape(site.get('youtube_url',''))}' />
-      <label>About Tags (comma-separated)</label><input name='tags' value='{html.escape(', '.join(site.get('tags') or []))}' />
-      <button type='submit'>Save Site</button>
+      <label>Your Name</label><input name='name' value='{html.escape(site.get('name',''))}' />
+      <label>Email</label><input name='email' value='{html.escape(site.get('email',''))}' type='email' />
+      <label>Photo Folder</label>
+      <input name='photo_inbox' value='{html.escape(site.get('photo_inbox', inbox_path))}' placeholder='{html.escape(inbox_path)}' />
+      <p class='muted'>Folder where your phone photos sync to (Google Drive folder)</p>
+      <button type='submit' class='secondary'>Save Settings</button>
     </form>
   </div>
 
-  <div class='card'>
-    <h2>Add Guitar</h2>
-    <form method='post' action='/guitars/add'>
-      <label>Title / Name</label><input name='title' required />
-      <label>Status</label>
-      <select name='status'>
-        <option>In Progress</option><option>Complete</option>
-        <option>Available</option><option>Sold</option>
-      </select>
-      <label>Description</label><textarea name='description'></textarea>
-      <label>Body Wood</label><input name='body_wood' />
-      <label>Neck Wood</label><input name='neck_wood' />
-      <label>Fretboard</label><input name='fretboard' />
-      <label>Hardware</label><input name='hardware' />
-      <label>Pickups</label><input name='pickups' />
-      <label>Finish</label><input name='finish' />
-      <label>Scale Length</label><input name='scale_length' />
-      <label>Est. Completion</label><input name='estimated_completion' />
-      <label>Price ($)</label><input name='price' type='number' step='0.01' />
-      <label>Customer Name</label><input name='customer_name' />
-      <label>Deposit Paid ($)</label><input name='deposit_paid' type='number' step='0.01' />
-      <label>Balance Due ($)</label><input name='balance_due' type='number' step='0.01' />
-      <label>Customer Notes</label><textarea name='customer_notes'></textarea>
-      <label>Tags (comma-separated)</label><input name='tags' />
-      <label>Bullets (one per line)</label><textarea name='bullets'></textarea>
-      <label>Cover image path or URL</label><input name='image_path' />
-      <button type='submit'>Add Guitar</button>
-    </form>
-  </div>
-
-  <div class='card'>
-    <h2>Add Build</h2>
+  <div class='card' style='grid-column: 1 / -1;'>
+    <h2>➕ Add New Guitar Build</h2>
     <form method='post' action='/projects/add'>
-      <label>Title</label><input name='title' required />
-      <label>Status</label>
-      <select name='status'><option>Complete</option><option>In Progress</option><option>Archived</option></select>
-      <label>Description</label><textarea name='description'></textarea>
-      <label>Bullets (one per line)</label><textarea name='bullets'></textarea>
-      <label>Tags (comma-separated)</label><input name='tags' />
-      <label>Cover image path or URL</label><input name='image_path' placeholder='images/test-photo.svg or /full/path/img.jpg' />
-      <button type='submit'>Add Build</button>
+      <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;'>
+        <div>
+          <label>Guitar Name *</label>
+          <input name='title' required placeholder="e.g. Telecaster Refinish" />
+          
+          <label>Status</label>
+          <select name='status'>
+            <option>In Progress</option>
+            <option>Complete</option>
+            <option>Archived</option>
+          </select>
+          
+          <label>Description</label>
+          <textarea name='description' placeholder="Brief description of the build..."></textarea>
+          
+          <label>Tags (comma-separated)</label>
+          <input name='tags' placeholder="e.g. refinish, telecaster, custom" />
+        </div>
+        <div>
+          {photo_picker}
+        </div>
+      </div>
+      <button type='submit'>Add Guitar Build</button>
     </form>
   </div>
 
   <div class='card'>
-    <h2>Add Repair</h2>
-    <form method='post' action='/repairs/add'>
-      <label>Title</label><input name='title' required />
-      <label>Date</label><input name='date' value='{datetime.now().strftime('%Y-%m-%d')}' />
-      <label>Status</label><input name='status' value='Fixed' />
-      <label>Device</label><input name='device' />
-      <label>Symptom</label><textarea name='symptom'></textarea>
-      <label>Diagnosis</label><textarea name='diagnosis'></textarea>
-      <label>Fix</label><textarea name='fix'></textarea>
-      <label>Notes</label><textarea name='notes'></textarea>
-      <label>Tags (comma-separated)</label><input name='tags' />
-      <label>Photo path or URL</label><input name='image_path' />
-      <button type='submit'>Add Repair</button>
-    </form>
+    <h2>🎸 Guitar Builds</h2>
+    <ul class='list'>{project_items}</ul>
   </div>
 
   <div class='card'>
-    <h2>Guitars</h2>
-    <ol class='list'>{guitar_items}</ol>
-  </div>
-
-  <div class='card'>
-    <h2>Builds</h2>
-    <ol class='list'>{project_items}</ol>
-  </div>
-
-  <div class='card'>
-    <h2>Repairs</h2>
-    <ol class='list'>{repair_items}</ol>
+    <h2>🔧 Repairs</h2>
+    <ul class='list'>{repair_items}</ul>
+    <a href='/repair/new'>+ Add Repair</a>
   </div>
 </div>
 """
-            self._send_html(_web_layout("jeffwillock Admin", body, message))
+            self._send_html(_web_layout("JC Custom Admin", body, message))
 
         def _render_story(self, idx: int, message: str = ""):
             projects = load_projects()
@@ -565,35 +785,44 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
 
             project = projects[idx]
             steps = project.get("steps") or []
-            section_items = "\n".join([
-                f"<li><strong>{i+1}. {html.escape(s.get('title','Part'))}</strong>"
-                f" <a href='/story/edit?idx={idx}&step_idx={i}'>Edit</a>"
-                f"<form method='post' action='/story/delete' style='display:inline; margin-left:8px;'>"
-                f"<input type='hidden' name='idx' value='{idx}' />"
-                f"<input type='hidden' name='step_idx' value='{i}' />"
-                f"<button class='warn' type='submit'>Delete</button></form></li>"
-                for i, s in enumerate(steps)
-            ]) or "<li class='muted'>No story sections yet.</li>"
+            
+            section_items = ""
+            for i, s in enumerate(steps):
+                section_items += f"""
+<li>
+  <strong>{i+1}. {html.escape(s.get('title','Part'))}</strong>
+  <div>
+    <a href='/story/edit?idx={idx}&step_idx={i}'>Edit</a>
+    <form method='post' action='/story/delete' style='display:inline;'>
+      <input type='hidden' name='idx' value='{idx}'>
+      <input type='hidden' name='step_idx' value='{i}'>
+      <button class='small warn' type='submit'>Delete</button>
+    </form>
+  </div>
+</li>
+"""
+            if not section_items:
+                section_items = "<li class='muted'>No story sections yet. Add the build process below!</li>"
+
+            photo_picker = _photo_picker_html("image_path")
 
             body = f"""
 <div class='card'>
-  <h2>Build Story: {html.escape(project.get('title','Untitled'))}</h2>
+  <h2>📖 Build Story: {html.escape(project.get('title','Untitled'))}</h2>
   <p><a href='/'>← Back to dashboard</a></p>
-  <ol class='list'>{section_items}</ol>
-  <form method='post' action='/story/clear'>
-    <input type='hidden' name='idx' value='{idx}' />
-    <button class='warn' type='submit'>Clear All Sections</button>
-  </form>
+  <ul class='list'>{section_items}</ul>
 </div>
 
 <div class='card'>
-  <h3>Add Story Section</h3>
+  <h3>➕ Add Story Section</h3>
+  <p class='muted'>Document each step of your build with photos and notes.</p>
   <form method='post' action='/story/add'>
-    <input type='hidden' name='idx' value='{idx}' />
-    <label>Section title</label><input name='title' placeholder='Part {len(steps)+1}' />
-    <label>Section text</label><textarea name='text'></textarea>
-    <label>Image path or URL</label><input name='image_path' />
-    <label>Image alt text</label><input name='alt' />
+    <input type='hidden' name='idx' value='{idx}'>
+    <label>Section Title</label>
+    <input name='title' placeholder='e.g. Sanding the Body' />
+    <label>Description</label>
+    <textarea name='text' placeholder="What you did in this step..."></textarea>
+    {photo_picker}
     <button type='submit'>Add Section</button>
   </form>
 </div>
@@ -613,26 +842,60 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
                 f"<option {'selected' if status_value == opt else ''}>{opt}</option>" for opt in options
             ])
 
+            cover = p.get('cover_image') or p.get('image') or ''
+            photo_picker = _photo_picker_html("cover_image", cover)
+            gallery_picker = _photo_picker_html("images", "\n".join(p.get("images") or []), multi=True)
+
             body = f"""
 <div class='card'>
-    <h2>Edit Build: {html.escape(p.get('title','Untitled'))}</h2>
+    <h2>✏️ Edit: {html.escape(p.get('title','Untitled'))}</h2>
     <p><a href='/'>← Back to dashboard</a></p>
     <form method='post' action='/projects/save'>
-        <input type='hidden' name='idx' value='{idx}' />
+        <input type='hidden' name='idx' value='{idx}'>
         <label>Title</label><input name='title' value='{html.escape(p.get('title',''))}' required />
         <label>Status</label><select name='status'>{status_opts}</select>
         <label>Description</label><textarea name='description'>{html.escape(p.get('description',''))}</textarea>
-        <label>Bullets (one per line)</label><textarea name='bullets'>{html.escape(chr(10).join(p.get('bullets') or []))}</textarea>
+        <label>Key Points (one per line)</label><textarea name='bullets'>{html.escape(chr(10).join(p.get('bullets') or []))}</textarea>
         <label>Tags (comma-separated)</label><input name='tags' value='{html.escape(', '.join(p.get('tags') or []))}' />
-        <label>Cover image path or URL</label><input name='cover_image' value='{html.escape(p.get('cover_image') or p.get('image') or '')}' />
-        <label>Alt text</label><input name='alt' value='{html.escape(p.get('alt') or p.get('title') or '')}' />
-        <label>Gallery image paths/URLs (one per line)</label><textarea name='images'>{html.escape(chr(10).join(p.get('images') or []))}</textarea>
-        <label>Links (one per line: label|url)</label><textarea name='links'>{html.escape(_links_to_lines(p.get('links') or []))}</textarea>
-        <button type='submit'>Save Build</button>
+        
+        <h3 style='margin-top:24px;'>Cover Photo</h3>
+        {photo_picker}
+        
+        <h3 style='margin-top:24px;'>Gallery Photos</h3>
+        {gallery_picker}
+        
+        <button type='submit'>Save Changes</button>
     </form>
 </div>
 """
             self._send_html(_web_layout("Edit Build", body, message))
+
+        def _render_repair_new(self, message: str = ""):
+            photo_picker = _photo_picker_html("image_path")
+            
+            body = f"""
+<div class='card'>
+    <h2>➕ Add Repair</h2>
+    <p><a href='/'>← Back to dashboard</a></p>
+    <form method='post' action='/repairs/add'>
+        <label>Title</label><input name='title' required placeholder="e.g. Fret Level - Stratocaster" />
+        <label>Date</label><input name='date' type='date' value='{datetime.now().strftime('%Y-%m-%d')}' />
+        <label>Status</label><input name='status' value='Fixed' />
+        <label>Device/Guitar</label><input name='device' placeholder="e.g. 1972 Fender Stratocaster" />
+        <label>Issue</label><textarea name='symptom' placeholder="What was wrong..."></textarea>
+        <label>Diagnosis</label><textarea name='diagnosis' placeholder="What you found..."></textarea>
+        <label>Fix</label><textarea name='fix' placeholder="What you did to fix it..."></textarea>
+        <label>Notes</label><textarea name='notes' placeholder="Additional notes..."></textarea>
+        <label>Tags</label><input name='tags' placeholder="e.g. frets, setup, electronics" />
+        
+        <h3 style='margin-top:24px;'>Photo</h3>
+        {photo_picker}
+        
+        <button type='submit'>Add Repair</button>
+    </form>
+</div>
+"""
+            self._send_html(_web_layout("Add Repair", body, message))
 
         def _render_repair_edit(self, idx: int, message: str = ""):
             repairs = load_repairs()
@@ -641,24 +904,28 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
                 return
 
             r = repairs[idx]
+            photo_picker = _photo_picker_html("image", r.get("image", ""))
+
             body = f"""
 <div class='card'>
-    <h2>Edit Repair: {html.escape(r.get('title','Untitled Repair'))}</h2>
+    <h2>✏️ Edit Repair: {html.escape(r.get('title','Untitled'))}</h2>
     <p><a href='/'>← Back to dashboard</a></p>
     <form method='post' action='/repairs/save'>
-        <input type='hidden' name='idx' value='{idx}' />
+        <input type='hidden' name='idx' value='{idx}'>
         <label>Title</label><input name='title' value='{html.escape(r.get('title',''))}' required />
-        <label>Date</label><input name='date' value='{html.escape(r.get('date',''))}' />
+        <label>Date</label><input name='date' type='date' value='{html.escape(r.get('date',''))}' />
         <label>Status</label><input name='status' value='{html.escape(r.get('status',''))}' />
-        <label>Device</label><input name='device' value='{html.escape(r.get('device',''))}' />
-        <label>Symptom</label><textarea name='symptom'>{html.escape(r.get('symptom',''))}</textarea>
+        <label>Device/Guitar</label><input name='device' value='{html.escape(r.get('device',''))}' />
+        <label>Issue</label><textarea name='symptom'>{html.escape(r.get('symptom',''))}</textarea>
         <label>Diagnosis</label><textarea name='diagnosis'>{html.escape(r.get('diagnosis',''))}</textarea>
         <label>Fix</label><textarea name='fix'>{html.escape(r.get('fix',''))}</textarea>
         <label>Notes</label><textarea name='notes'>{html.escape(r.get('notes',''))}</textarea>
-        <label>Tags (comma-separated)</label><input name='tags' value='{html.escape(', '.join(r.get('tags') or []))}' />
-        <label>Photo path or URL</label><input name='image' value='{html.escape(r.get('image') or '')}' />
-        <label>Alt text</label><input name='alt' value='{html.escape(r.get('alt') or r.get('title') or '')}' />
-        <button type='submit'>Save Repair</button>
+        <label>Tags</label><input name='tags' value='{html.escape(', '.join(r.get('tags') or []))}' />
+        
+        <h3 style='margin-top:24px;'>Photo</h3>
+        {photo_picker}
+        
+        <button type='submit'>Save Changes</button>
     </form>
 </div>
 """
@@ -675,145 +942,41 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
                 return
 
             s = steps[step_idx]
+            photo_picker = _photo_picker_html("image", s.get("image", ""))
+
             body = f"""
 <div class='card'>
-    <h2>Edit Story Section: {html.escape(projects[idx].get('title','Untitled'))}</h2>
+    <h2>✏️ Edit Section: {html.escape(projects[idx].get('title','Untitled'))}</h2>
     <p><a href='/story?idx={idx}'>← Back to story</a></p>
     <form method='post' action='/story/save'>
-        <input type='hidden' name='idx' value='{idx}' />
-        <input type='hidden' name='step_idx' value='{step_idx}' />
-        <label>Section title</label><input name='title' value='{html.escape(s.get('title',''))}' />
-        <label>Section text</label><textarea name='text'>{html.escape(s.get('text',''))}</textarea>
-        <label>Image path or URL</label><input name='image' value='{html.escape(s.get('image',''))}' />
-        <label>Alt text</label><input name='alt' value='{html.escape(s.get('alt',''))}' />
+        <input type='hidden' name='idx' value='{idx}'>
+        <input type='hidden' name='step_idx' value='{step_idx}'>
+        <label>Section Title</label><input name='title' value='{html.escape(s.get('title',''))}' />
+        <label>Description</label><textarea name='text'>{html.escape(s.get('text',''))}</textarea>
+        
+        <h3 style='margin-top:24px;'>Photo</h3>
+        {photo_picker}
+        
         <button type='submit'>Save Section</button>
     </form>
 </div>
 """
             self._send_html(_web_layout("Edit Story Section", body, message))
 
-        def _render_guitar_edit(self, idx: int, message: str = ""):
-            guitars = load_guitars()
-            if idx < 0 or idx >= len(guitars):
-                self._redirect("/", "Invalid guitar selection")
-                return
-            g = guitars[idx]
-            status_value = g.get("status", "In Progress")
-            options = ["In Progress", "Complete", "Available", "Sold", "Archived"]
-            status_opts = "\n".join([
-                f"<option {'selected' if status_value == opt else ''}>{opt}</option>"
-                for opt in options
-            ])
-
-            def v(key):
-                return html.escape(str(g.get(key) or ""), quote=True)
-
-            body = f"""
-<div class='card'>
-    <h2>Edit Guitar: #{g.get('number','')} {html.escape(g.get('title','Untitled'))}</h2>
-    <p><a href='/'>← Back to dashboard</a></p>
-    <form method='post' action='/guitars/save'>
-        <input type='hidden' name='idx' value='{idx}' />
-        <label>Title</label><input name='title' value='{v("title")}' required />
-        <label>Status</label><select name='status'>{status_opts}</select>
-        <label>Description</label><textarea name='description'>{v("description")}</textarea>
-        <label>Body Wood</label><input name='body_wood' value='{v("body_wood")}' />
-        <label>Neck Wood</label><input name='neck_wood' value='{v("neck_wood")}' />
-        <label>Fretboard</label><input name='fretboard' value='{v("fretboard")}' />
-        <label>Hardware</label><input name='hardware' value='{v("hardware")}' />
-        <label>Pickups</label><input name='pickups' value='{v("pickups")}' />
-        <label>Finish</label><input name='finish' value='{v("finish")}' />
-        <label>Scale Length</label><input name='scale_length' value='{v("scale_length")}' />
-        <label>Est. Completion</label><input name='estimated_completion' value='{v("estimated_completion")}' />
-        <label>Price ($)</label><input name='price' type='number' step='0.01' value='{v("price")}' />
-        <label>Customer Name</label><input name='customer_name' value='{v("customer_name")}' />
-        <label>Deposit Paid ($)</label><input name='deposit_paid' type='number' step='0.01' value='{v("deposit_paid")}' />
-        <label>Balance Due ($)</label><input name='balance_due' type='number' step='0.01' value='{v("balance_due")}' />
-        <label>Customer Notes</label><textarea name='customer_notes'>{v("customer_notes")}</textarea>
-        <label>Tags (comma-separated)</label><input name='tags' value='{html.escape(", ".join(g.get("tags") or []), quote=True)}' />
-        <label>Bullets (one per line)</label><textarea name='bullets'>{html.escape(chr(10).join(g.get("bullets") or []))}</textarea>
-        <label>Cover image path or URL</label><input name='cover_image' value='{v("cover_image")}' />
-        <label>Alt text</label><input name='alt' value='{v("alt")}' />
-        <label>Gallery images (one per line)</label><textarea name='images'>{html.escape(chr(10).join(g.get("images") or []))}</textarea>
-        <label>Links (label|url, one per line)</label><textarea name='links'>{html.escape(_links_to_lines(g.get("links") or []))}</textarea>
-        <button type='submit'>Save Guitar</button>
-    </form>
-</div>
-"""
-            self._send_html(_web_layout("Edit Guitar", body, message))
-
-        def _render_guitar_story(self, idx: int, message: str = ""):
-            guitars = load_guitars()
-            if idx < 0 or idx >= len(guitars):
-                self._redirect("/", "Invalid guitar selection")
-                return
-            guitar = guitars[idx]
-            steps = guitar.get("steps") or []
-            section_items = "\n".join([
-                f"<li><strong>{i+1}. {html.escape(s.get('title','Part'))}</strong>"
-                f" <a href='/guitar/story/edit?idx={idx}&step_idx={i}'>Edit</a>"
-                f"<form method='post' action='/guitar/story/delete' style='display:inline; margin-left:8px;'>"
-                f"<input type='hidden' name='idx' value='{idx}' />"
-                f"<input type='hidden' name='step_idx' value='{i}' />"
-                f"<button class='warn' type='submit'>Delete</button></form></li>"
-                for i, s in enumerate(steps)
-            ]) or "<li class='muted'>No sections yet.</li>"
-
-            body = f"""
-<div class='card'>
-  <h2>Build Story: #{guitar.get('number','')} {html.escape(guitar.get('title','Untitled'))}</h2>
-  <p><a href='/'>← Back to dashboard</a></p>
-  <ol class='list'>{section_items}</ol>
-  <form method='post' action='/guitar/story/clear'>
-    <input type='hidden' name='idx' value='{idx}' />
-    <button class='warn' type='submit'>Clear All Sections</button>
-  </form>
-</div>
-<div class='card'>
-  <h3>Add Story Section</h3>
-  <form method='post' action='/guitar/story/add'>
-    <input type='hidden' name='idx' value='{idx}' />
-    <label>Section title</label><input name='title' placeholder='Part {len(steps)+1}' />
-    <label>Section text</label><textarea name='text'></textarea>
-    <label>Image path or URL</label><input name='image_path' />
-    <label>Image alt text</label><input name='alt' />
-    <button type='submit'>Add Section</button>
-  </form>
-</div>
-"""
-            self._send_html(_web_layout("Guitar Story", body, message))
-
-        def _render_guitar_story_edit(self, idx: int, step_idx: int, message: str = ""):
-            guitars = load_guitars()
-            if idx < 0 or idx >= len(guitars):
-                self._redirect("/", "Invalid guitar selection")
-                return
-            steps = guitars[idx].get("steps") or []
-            if step_idx < 0 or step_idx >= len(steps):
-                self._redirect(f"/guitar/story?idx={idx}", "Invalid section")
-                return
-            s = steps[step_idx]
-            body = f"""
-<div class='card'>
-    <h2>Edit Story Section</h2>
-    <p><a href='/guitar/story?idx={idx}'>← Back to story</a></p>
-    <form method='post' action='/guitar/story/save'>
-        <input type='hidden' name='idx' value='{idx}' />
-        <input type='hidden' name='step_idx' value='{step_idx}' />
-        <label>Section title</label><input name='title' value='{html.escape(s.get("title",""), quote=True)}' />
-        <label>Section text</label><textarea name='text'>{html.escape(s.get("text",""))}</textarea>
-        <label>Image path or URL</label><input name='image' value='{html.escape(s.get("image",""), quote=True)}' />
-        <label>Alt text</label><input name='alt' value='{html.escape(s.get("alt",""), quote=True)}' />
-        <button type='submit'>Save Section</button>
-    </form>
-</div>
-"""
-            self._send_html(_web_layout("Edit Guitar Story Section", body, message))
-
         def do_GET(self):
             parsed = urlparse(self.path)
             query = parse_qs(parsed.query)
             message = (query.get("msg") or [""])[0]
+
+            # Serve photos
+            if parsed.path == "/photo":
+                photo_path = (query.get("path") or [""])[0]
+                photo_path = unquote(photo_path)
+                if photo_path and os.path.isfile(photo_path):
+                    self._send_image(photo_path)
+                else:
+                    self.send_error(404)
+                return
 
             if parsed.path == "/":
                 self._render_home(message)
@@ -829,6 +992,10 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
                 idx_raw = (query.get("idx") or ["-1"])[0]
                 idx = _safe_index(idx_raw, len(load_projects()))
                 self._render_project_edit(idx, message)
+                return
+
+            if parsed.path == "/repair/new":
+                self._render_repair_new(message)
                 return
 
             if parsed.path == "/repair/edit":
@@ -847,64 +1014,87 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
                 self._render_story_edit(idx, step_idx, message)
                 return
 
-            if parsed.path == "/guitar/edit":
-                idx_raw = (query.get("idx") or ["-1"])[0]
-                idx = _safe_index(idx_raw, len(load_guitars()))
-                self._render_guitar_edit(idx, message)
-                return
-
-            if parsed.path == "/guitar/story":
-                idx_raw = (query.get("idx") or ["-1"])[0]
-                idx = _safe_index(idx_raw, len(load_guitars()))
-                self._render_guitar_story(idx, message)
-                return
-
-            if parsed.path == "/guitar/story/edit":
-                idx_raw = (query.get("idx") or ["-1"])[0]
-                step_raw = (query.get("step_idx") or ["-1"])[0]
-                guitars_list = load_guitars()
-                idx = _safe_index(idx_raw, len(guitars_list))
-                steps_total = len(guitars_list[idx].get("steps") or []) if idx >= 0 else 0
-                step_idx = _safe_index(step_raw, steps_total)
-                self._render_guitar_story_edit(idx, step_idx, message)
-                return
-
-            self._send_html(_web_layout("Not Found", "<div class='card'><h2>404</h2></div>"), status=404)
+            self._send_html(_web_layout("Not Found", "<div class='card'><h2>404 - Page Not Found</h2><p><a href='/'>Go home</a></p></div>"), status=404)
 
         def do_POST(self):
+            parsed = urlparse(self.path)
+            path = parsed.path
+            content_type = self.headers.get("Content-Type", "")
+            
+            # Handle file uploads
+            if path == "/upload" and content_type.startswith("multipart/form-data"):
+                try:
+                    # Parse multipart data
+                    environ = {
+                        'REQUEST_METHOD': 'POST',
+                        'CONTENT_TYPE': content_type,
+                        'CONTENT_LENGTH': self.headers.get('Content-Length', '0'),
+                    }
+                    form = cgi.FieldStorage(
+                        fp=self.rfile,
+                        headers=self.headers,
+                        environ=environ
+                    )
+                    
+                    os.makedirs(IMAGES_DIR, exist_ok=True)
+                    saved_paths = []
+                    
+                    # Handle both single and multiple files
+                    photos = form.getlist('photos')
+                    if not photos:
+                        # Try single file
+                        if 'photos' in form and form['photos'].filename:
+                            photos = [form['photos']]
+                    
+                    for item in photos:
+                        if hasattr(item, 'filename') and item.filename:
+                            filename = os.path.basename(item.filename)
+                            # Sanitize filename
+                            filename = re.sub(r'[^\w\-_\.]', '_', filename)
+                            # Add timestamp to avoid conflicts
+                            name, ext = os.path.splitext(filename)
+                            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+                            new_filename = f"{timestamp}-{name}{ext}"
+                            
+                            dest_path = os.path.join(IMAGES_DIR, new_filename)
+                            with open(dest_path, 'wb') as f:
+                                f.write(item.file.read())
+                            saved_paths.append(dest_path)
+                    
+                    self._send_json({"success": True, "paths": saved_paths})
+                except Exception as e:
+                    self._send_json({"success": False, "error": str(e)}, status=500)
+                return
+            
             form = parse_form(self)
-            path = urlparse(self.path).path
 
             if path == "/actions/rebuild":
                 rebuild_all()
-                self._redirect("/", "Rebuilt site pages.")
+                self._redirect("/", "✅ Site rebuilt successfully!")
                 return
 
             if path == "/actions/publish":
                 ok, msg = publish_to_github_noninteractive(form.get("commit_message", ""))
-                self._redirect("/", msg)
+                prefix = "✅" if ok else "❌"
+                self._redirect("/", f"{prefix} {msg}")
                 return
 
             if path == "/site/save":
                 create_backup_note("web-site-save")
                 site = load_site()
                 site["name"] = form.get("name", "")
-                site["tagline"] = form.get("tagline", "")
-                site["build_log_note"] = form.get("build_log_note", "")
-                site["about_text"] = form.get("about_text", "")
                 site["email"] = form.get("email", "")
-                site["instagram_url"] = form.get("instagram_url", "")
-                site["youtube_url"] = form.get("youtube_url", "")
-                site["tags"] = _split_csv(form.get("tags", ""))
+                site["photo_inbox"] = form.get("photo_inbox", "")
+                # Preserve other settings
                 save_site(site)
                 rebuild_all()
-                self._redirect("/", "Saved site settings.")
+                self._redirect("/", "✅ Settings saved!")
                 return
 
             if path == "/projects/add":
                 title = (form.get("title") or "").strip()
                 if not title:
-                    self._redirect("/", "Build title is required.")
+                    self._redirect("/", "❌ Guitar name is required.")
                     return
                 create_backup_note("web-project-add")
 
@@ -912,7 +1102,7 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
                 project = {
                     "title": title,
                     "slug": slugify(title),
-                    "status": normalize_status(form.get("status", "Complete")),
+                    "status": normalize_status(form.get("status", "In Progress")),
                     "cover_image": image_rel,
                     "image": image_rel,
                     "images": [],
@@ -928,27 +1118,28 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
                 projects.insert(0, project)
                 save_projects(projects)
                 rebuild_all(projects)
-                self._redirect("/", "Added build.")
+                self._redirect("/", f"✅ Added '{title}'!")
                 return
 
             if path == "/projects/delete":
                 projects = load_projects()
                 idx = _safe_index(form.get("idx", "-1"), len(projects))
                 if idx < 0:
-                    self._redirect("/", "Invalid build selection.")
+                    self._redirect("/", "❌ Invalid build selection.")
                     return
                 create_backup_note("web-project-delete")
+                title = projects[idx].get("title", "build")
                 projects.pop(idx)
                 save_projects(projects)
                 rebuild_all(projects)
-                self._redirect("/", "Deleted build.")
+                self._redirect("/", f"✅ Deleted '{title}'")
                 return
 
             if path == "/projects/save":
                 projects = load_projects()
                 idx = _safe_index(form.get("idx", "-1"), len(projects))
                 if idx < 0:
-                    self._redirect("/", "Invalid build selection.")
+                    self._redirect("/", "❌ Invalid build selection.")
                     return
 
                 create_backup_note("web-project-save")
@@ -973,13 +1164,13 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
 
                 save_projects(projects)
                 rebuild_all(projects)
-                self._redirect("/", "Saved build.")
+                self._redirect("/", f"✅ Saved '{title}'")
                 return
 
             if path == "/repairs/add":
                 title = (form.get("title") or "").strip()
                 if not title:
-                    self._redirect("/", "Repair title is required.")
+                    self._redirect("/", "❌ Repair title is required.")
                     return
                 create_backup_note("web-repair-add")
                 image_rel = resolve_image_input(form.get("image_path", ""), title)
@@ -1001,27 +1192,28 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
                 repairs.insert(0, entry)
                 save_repairs(repairs)
                 rebuild_all()
-                self._redirect("/", "Added repair entry.")
+                self._redirect("/", f"✅ Added repair '{title}'")
                 return
 
             if path == "/repairs/delete":
                 repairs = load_repairs()
                 idx = _safe_index(form.get("idx", "-1"), len(repairs))
                 if idx < 0:
-                    self._redirect("/", "Invalid repair selection.")
+                    self._redirect("/", "❌ Invalid repair selection.")
                     return
                 create_backup_note("web-repair-delete")
+                title = repairs[idx].get("title", "repair")
                 repairs.pop(idx)
                 save_repairs(repairs)
                 rebuild_all()
-                self._redirect("/", "Deleted repair entry.")
+                self._redirect("/", f"✅ Deleted '{title}'")
                 return
 
             if path == "/repairs/save":
                 repairs = load_repairs()
                 idx = _safe_index(form.get("idx", "-1"), len(repairs))
                 if idx < 0:
-                    self._redirect("/", "Invalid repair selection.")
+                    self._redirect("/", "❌ Invalid repair selection.")
                     return
 
                 create_backup_note("web-repair-save")
@@ -1042,14 +1234,14 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
 
                 save_repairs(repairs)
                 rebuild_all()
-                self._redirect("/", "Saved repair entry.")
+                self._redirect("/", f"✅ Saved '{title}'")
                 return
 
             if path == "/story/add":
                 projects = load_projects()
                 idx = _safe_index(form.get("idx", "-1"), len(projects))
                 if idx < 0:
-                    self._redirect("/", "Invalid project selection.")
+                    self._redirect("/", "❌ Invalid project selection.")
                     return
                 create_backup_note("web-story-add")
                 project = projects[idx]
@@ -1069,19 +1261,19 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
                 project["updated"] = datetime.now().isoformat(timespec="seconds")
                 save_projects(projects)
                 rebuild_all(projects)
-                self._redirect(f"/story?idx={idx}", "Added story section.")
+                self._redirect(f"/story?idx={idx}", f"✅ Added section '{title}'")
                 return
 
             if path == "/story/save":
                 projects = load_projects()
                 idx = _safe_index(form.get("idx", "-1"), len(projects))
                 if idx < 0:
-                    self._redirect("/", "Invalid project selection.")
+                    self._redirect("/", "❌ Invalid project selection.")
                     return
                 steps = projects[idx].get("steps") or []
                 step_idx = _safe_index(form.get("step_idx", "-1"), len(steps))
                 if step_idx < 0:
-                    self._redirect(f"/story?idx={idx}", "Invalid section selection.")
+                    self._redirect(f"/story?idx={idx}", "❌ Invalid section selection.")
                     return
 
                 create_backup_note("web-story-save")
@@ -1097,19 +1289,19 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
 
                 save_projects(projects)
                 rebuild_all(projects)
-                self._redirect(f"/story?idx={idx}", "Saved story section.")
+                self._redirect(f"/story?idx={idx}", f"✅ Saved section")
                 return
 
             if path == "/story/delete":
                 projects = load_projects()
                 idx = _safe_index(form.get("idx", "-1"), len(projects))
                 if idx < 0:
-                    self._redirect("/", "Invalid project selection.")
+                    self._redirect("/", "❌ Invalid project selection.")
                     return
                 steps = projects[idx].get("steps") or []
                 step_idx = _safe_index(form.get("step_idx", "-1"), len(steps))
                 if step_idx < 0:
-                    self._redirect(f"/story?idx={idx}", "Invalid section selection.")
+                    self._redirect(f"/story?idx={idx}", "❌ Invalid section selection.")
                     return
                 create_backup_note("web-story-delete")
                 steps.pop(step_idx)
@@ -1117,217 +1309,21 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
                 projects[idx]["updated"] = datetime.now().isoformat(timespec="seconds")
                 save_projects(projects)
                 rebuild_all(projects)
-                self._redirect(f"/story?idx={idx}", "Deleted story section.")
+                self._redirect(f"/story?idx={idx}", "✅ Deleted section")
                 return
 
             if path == "/story/clear":
                 projects = load_projects()
                 idx = _safe_index(form.get("idx", "-1"), len(projects))
                 if idx < 0:
-                    self._redirect("/", "Invalid project selection.")
+                    self._redirect("/", "❌ Invalid project selection.")
                     return
                 create_backup_note("web-story-clear")
                 projects[idx]["steps"] = []
                 projects[idx]["updated"] = datetime.now().isoformat(timespec="seconds")
                 save_projects(projects)
                 rebuild_all(projects)
-                self._redirect(f"/story?idx={idx}", "Cleared story sections.")
-                return
-
-            if path == "/guitars/add":
-                title = (form.get("title") or "").strip()
-                if not title:
-                    self._redirect("/", "Guitar title is required.")
-                    return
-                create_backup_note("web-guitar-add")
-                guitars = load_guitars()
-                number = _next_guitar_number(guitars)
-                image_rel = resolve_image_input(form.get("image_path", ""), title)
-
-                def _num(key):
-                    v = form.get(key, "").strip()
-                    try: return float(v) if v else None
-                    except ValueError: return None
-
-                guitar = {
-                    "title": title,
-                    "number": number,
-                    "slug": slugify(title),
-                    "status": normalize_status(form.get("status", "In Progress")),
-                    "cover_image": image_rel,
-                    "image": image_rel,
-                    "images": [],
-                    "alt": title,
-                    "description": form.get("description", ""),
-                    "body_wood":   form.get("body_wood", ""),
-                    "neck_wood":   form.get("neck_wood", ""),
-                    "fretboard":   form.get("fretboard", ""),
-                    "hardware":    form.get("hardware", ""),
-                    "pickups":     form.get("pickups", ""),
-                    "finish":      form.get("finish", ""),
-                    "scale_length": form.get("scale_length", ""),
-                    "estimated_completion": form.get("estimated_completion", ""),
-                    "price":          _num("price"),
-                    "customer_name":  form.get("customer_name", ""),
-                    "deposit_paid":   _num("deposit_paid"),
-                    "balance_due":    _num("balance_due"),
-                    "customer_notes": form.get("customer_notes", ""),
-                    "tags":    _split_csv(form.get("tags", "")),
-                    "bullets": _split_lines(form.get("bullets", "")),
-                    "links":   [],
-                    "steps":   [],
-                    "created": datetime.now().isoformat(timespec="seconds"),
-                }
-                guitars.insert(0, guitar)
-                save_guitars(guitars)
-                rebuild_guitars_page(guitars)
-                rebuild_guitar_pages(guitars)
-                self._redirect("/", f"Added guitar #{number}: {title}")
-                return
-
-            if path == "/guitars/delete":
-                guitars = load_guitars()
-                idx = _safe_index(form.get("idx", "-1"), len(guitars))
-                if idx < 0:
-                    self._redirect("/", "Invalid guitar selection.")
-                    return
-                create_backup_note("web-guitar-delete")
-                guitars.pop(idx)
-                save_guitars(guitars)
-                rebuild_guitars_page(guitars)
-                rebuild_guitar_pages(guitars)
-                self._redirect("/", "Deleted guitar.")
-                return
-
-            if path == "/guitars/save":
-                guitars = load_guitars()
-                idx = _safe_index(form.get("idx", "-1"), len(guitars))
-                if idx < 0:
-                    self._redirect("/", "Invalid guitar selection.")
-                    return
-                create_backup_note("web-guitar-save")
-                g = guitars[idx]
-                title = (form.get("title") or g.get("title") or "Untitled").strip()
-                g["title"]  = title
-                g["status"] = normalize_status(form.get("status", g.get("status", "In Progress")))
-                g["description"] = form.get("description", "")
-                for spec_key in ("body_wood", "neck_wood", "fretboard", "hardware", "pickups",
-                                 "finish", "scale_length", "estimated_completion",
-                                 "customer_name", "customer_notes"):
-                    g[spec_key] = form.get(spec_key, "")
-
-                def _num(key):
-                    v = form.get(key, "").strip()
-                    try: return float(v) if v else None
-                    except ValueError: return None
-
-                g["price"]        = _num("price")
-                g["deposit_paid"] = _num("deposit_paid")
-                g["balance_due"]  = _num("balance_due")
-                g["tags"]    = _split_csv(form.get("tags", ""))
-                g["bullets"] = _split_lines(form.get("bullets", ""))
-                g["alt"]     = form.get("alt", "") or title
-                cover = resolve_image_input(form.get("cover_image", ""), title)
-                g["cover_image"] = cover
-                g["image"]  = cover
-                g["images"] = [resolve_image_input(v, title) for v in _split_lines(form.get("images", ""))]
-                g["links"]  = _links_from_lines(form.get("links", ""))
-                g["updated"] = datetime.now().isoformat(timespec="seconds")
-                if not g.get("slug"):
-                    g["slug"] = slugify(title)
-                save_guitars(guitars)
-                rebuild_guitars_page(guitars)
-                rebuild_guitar_pages(guitars)
-                self._redirect("/", "Saved guitar.")
-                return
-
-            if path == "/guitar/story/add":
-                guitars = load_guitars()
-                idx = _safe_index(form.get("idx", "-1"), len(guitars))
-                if idx < 0:
-                    self._redirect("/", "Invalid guitar selection.")
-                    return
-                create_backup_note("web-guitar-story-add")
-                guitar = guitars[idx]
-                steps = guitar.get("steps") or []
-                step_no = len(steps) + 1
-                title_step = (form.get("title") or f"Part {step_no}").strip()
-                image_rel = resolve_image_input(
-                    form.get("image_path", ""),
-                    f"{guitar.get('title','guitar')}-part-{step_no}"
-                )
-                steps.append({
-                    "title": title_step,
-                    "text":  form.get("text", ""),
-                    "image": image_rel,
-                    "alt":   form.get("alt", "") or title_step,
-                })
-                guitar["steps"]   = steps
-                guitar["updated"] = datetime.now().isoformat(timespec="seconds")
-                save_guitars(guitars)
-                rebuild_guitar_pages(guitars)
-                self._redirect(f"/guitar/story?idx={idx}", "Added story section.")
-                return
-
-            if path == "/guitar/story/save":
-                guitars = load_guitars()
-                idx = _safe_index(form.get("idx", "-1"), len(guitars))
-                if idx < 0:
-                    self._redirect("/", "Invalid guitar selection.")
-                    return
-                steps = guitars[idx].get("steps") or []
-                step_idx = _safe_index(form.get("step_idx", "-1"), len(steps))
-                if step_idx < 0:
-                    self._redirect(f"/guitar/story?idx={idx}", "Invalid section.")
-                    return
-                create_backup_note("web-guitar-story-save")
-                title_step = (form.get("title") or steps[step_idx].get("title") or "Part").strip()
-                steps[step_idx]["title"] = title_step
-                steps[step_idx]["text"]  = form.get("text", "")
-                steps[step_idx]["image"] = resolve_image_input(
-                    form.get("image", ""),
-                    f"{guitars[idx].get('title','guitar')}-part-{step_idx+1}"
-                )
-                steps[step_idx]["alt"] = form.get("alt", "") or title_step
-                guitars[idx]["steps"]   = steps
-                guitars[idx]["updated"] = datetime.now().isoformat(timespec="seconds")
-                save_guitars(guitars)
-                rebuild_guitar_pages(guitars)
-                self._redirect(f"/guitar/story?idx={idx}", "Saved story section.")
-                return
-
-            if path == "/guitar/story/delete":
-                guitars = load_guitars()
-                idx = _safe_index(form.get("idx", "-1"), len(guitars))
-                if idx < 0:
-                    self._redirect("/", "Invalid guitar selection.")
-                    return
-                steps = guitars[idx].get("steps") or []
-                step_idx = _safe_index(form.get("step_idx", "-1"), len(steps))
-                if step_idx < 0:
-                    self._redirect(f"/guitar/story?idx={idx}", "Invalid section.")
-                    return
-                create_backup_note("web-guitar-story-delete")
-                steps.pop(step_idx)
-                guitars[idx]["steps"]   = steps
-                guitars[idx]["updated"] = datetime.now().isoformat(timespec="seconds")
-                save_guitars(guitars)
-                rebuild_guitar_pages(guitars)
-                self._redirect(f"/guitar/story?idx={idx}", "Deleted section.")
-                return
-
-            if path == "/guitar/story/clear":
-                guitars = load_guitars()
-                idx = _safe_index(form.get("idx", "-1"), len(guitars))
-                if idx < 0:
-                    self._redirect("/", "Invalid guitar selection.")
-                    return
-                create_backup_note("web-guitar-story-clear")
-                guitars[idx]["steps"]   = []
-                guitars[idx]["updated"] = datetime.now().isoformat(timespec="seconds")
-                save_guitars(guitars)
-                rebuild_guitar_pages(guitars)
-                self._redirect(f"/guitar/story?idx={idx}", "Cleared sections.")
+                self._redirect(f"/story?idx={idx}", "✅ Cleared all sections")
                 return
 
             self._redirect("/", "Unknown action.")
@@ -1336,12 +1332,12 @@ def start_web_ui(host: str = "127.0.0.1", port: int = 8081):
             return
 
     server = ThreadingHTTPServer((host, port), AdminHandler)
-    print(f"\nWeb UI running at http://{host}:{port}")
-    print("Press Ctrl+C to stop the web UI server.")
+    print(f"\n🎸 JC Custom Admin running at http://{host}:{port}")
+    print("Press Ctrl+C to stop the server.\n")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nWeb UI stopped.")
+        print("\nServer stopped.")
     finally:
         server.server_close()
 
@@ -1373,6 +1369,7 @@ def load_site():
             "instagram_url": "",
             "youtube_url": "",
             "tags": [],
+            "photo_inbox": "",
         }
     try:
         with open(SITE_PATH, "r", encoding="utf-8") as f:
@@ -1387,9 +1384,10 @@ def load_site():
                 "instagram_url": "",
                 "youtube_url": "",
                 "tags": [],
+                "photo_inbox": "",
             }
-        # Ensure keys exist
         data.setdefault("tags", [])
+        data.setdefault("photo_inbox", "")
         return data
     except json.JSONDecodeError:
         print("⚠️  JSON parse error in site.json. Using defaults.")
@@ -1402,45 +1400,12 @@ def load_site():
             "instagram_url": "",
             "youtube_url": "",
             "tags": [],
+            "photo_inbox": "",
         }
 
 
 def save_site(site):
     _save_json(SITE_PATH, site)
-
-
-def load_guitars() -> list:
-    return _load_json_list(GUITARS_PATH)
-
-
-def save_guitars(guitars: list):
-    _save_json(GUITARS_PATH, guitars)
-
-
-def _next_guitar_number(guitars: list) -> int:
-    """Return the next sequential guitar number."""
-    nums = [g.get("number", 0) for g in guitars if isinstance(g.get("number"), int)]
-    return max(nums, default=0) + 1
-
-
-def ensure_guitar_slugs(guitars: list) -> bool:
-    changed = False
-    used = set()
-    for g in guitars:
-        base = slugify((g.get("slug") or g.get("title") or "guitar").strip())
-        slug = base
-        i = 2
-        while slug in used:
-            slug = f"{base}-{i}"
-            i += 1
-        used.add(slug)
-        if g.get("slug") != slug:
-            g["slug"] = slug
-            changed = True
-        if "steps" not in g or not isinstance(g.get("steps"), list):
-            g["steps"] = []
-            changed = True
-    return changed
 
 
 # ---------- Helpers ----------
@@ -1663,7 +1628,6 @@ def ensure_project_slugs(projects: list[dict]) -> bool:
 def copy_image_into_site(image_path: str, title: str) -> str:
     os.makedirs(IMAGES_DIR, exist_ok=True)
 
-    # PowerShell drag/drop often includes quotes
     image_path = (image_path or "").strip().strip('"')
 
     if not os.path.isfile(image_path):
@@ -1692,11 +1656,6 @@ def _lines_to_br(text: str) -> str:
 
 
 def _card_tags_block(tags: list[str]) -> tuple[str, str]:
-    """
-    Returns:
-      - data-tags string (slugified) for JS filtering
-      - HTML chips block (original strings) for display
-    """
     tags = tags or []
     clean = [t for t in tags if str(t).strip()]
     data_tags = ",".join([slugify(t) for t in clean])
@@ -1776,186 +1735,6 @@ def repair_card_html(r: dict) -> str:
         </div>
       </div>
 """.rstrip() + "\n"
-
-
-# ---------- Guitar HTML generators ----------
-
-_GUITAR_SPEC_LABELS = {
-    "body_wood":            "Body Wood",
-    "neck_wood":            "Neck Wood",
-    "fretboard":            "Fretboard",
-    "hardware":             "Hardware",
-    "pickups":              "Pickups",
-    "finish":               "Finish",
-    "scale_length":         "Scale Length",
-    "estimated_completion": "Est. Completion",
-}
-
-
-def _guitar_specs_table(g: dict) -> str:
-    rows = []
-    for key, label in _GUITAR_SPEC_LABELS.items():
-        val = (g.get(key) or "").strip()
-        if val:
-            rows.append(
-                f"    <tr><th>{html.escape(label)}</th>"
-                f"<td>{html.escape(val)}</td></tr>"
-            )
-    if not rows:
-        return ""
-    inner = "\n".join(rows)
-    return (
-        '<table class="specs-table">\n'
-        f"{inner}\n"
-        "</table>"
-    )
-
-
-def _guitar_price_block(g: dict) -> str:
-    price = g.get("price")
-    customer = (g.get("customer_name") or "").strip()
-    deposit = g.get("deposit_paid")
-    balance = g.get("balance_due")
-    notes = (g.get("customer_notes") or "").strip()
-
-    parts = []
-    if price:
-        parts.append(f'<p class="guitar-price"><strong>Price:</strong> ${price:,.0f}</p>')
-    if customer:
-        parts.append(f'<p><strong>Built for:</strong> {html.escape(customer)}</p>')
-    if deposit:
-        parts.append(f'<p><strong>Deposit paid:</strong> ${deposit:,.0f}</p>')
-    if balance:
-        parts.append(f'<p><strong>Balance due:</strong> ${balance:,.0f}</p>')
-    if notes:
-        parts.append(f'<p class="guitar-customer-notes">{html.escape(notes)}</p>')
-    if not parts:
-        return ""
-    return '\n<div class="price-block">\n' + "\n".join(parts) + "\n</div>"
-
-
-def guitar_card_html(g: dict) -> str:
-    raw_title = g.get("title", "Untitled Guitar")
-    number = g.get("number", "")
-    title = html.escape(raw_title, quote=True)
-    number_str = html.escape(str(number), quote=True) if number else ""
-    alt = html.escape(g.get("alt", raw_title), quote=True)
-
-    status = normalize_status(g.get("status", "In Progress"))
-    badge_class, badge_text = status_badge(status)
-
-    cover = html.escape((g.get("cover_image") or g.get("image") or "").strip(), quote=True)
-    desc_html = _lines_to_br(g.get("description", ""))
-    data_tags, tags_html = _card_tags_block(g.get("tags") or [])
-
-    slug = g.get("slug") or slugify(raw_title)
-    detail_href = f"guitars/{slug}.html"
-
-    eyebrow = f"#{number_str} — " if number_str else ""
-
-    # Spec highlights (up to 3 short ones shown on card)
-    spec_snippets = []
-    for key in ("body_wood", "fretboard", "pickups"):
-        v = (g.get(key) or "").strip()
-        if v:
-            spec_snippets.append(html.escape(v, quote=True))
-    specs_preview = ""
-    if spec_snippets:
-        chips = " · ".join(spec_snippets)
-        specs_preview = f'\n          <p class="guitar-spec-preview" style="color:var(--text-muted);font-size:0.92rem;margin:8px 0 0;">{chips}</p>'
-
-    price = g.get("price")
-    price_html = ""
-    if price:
-        price_html = f'\n          <p class="guitar-price-preview" style="margin:8px 0 0;font-weight:700;color:var(--accent);">${price:,.0f}</p>'
-
-    return f"""
-      <div class="project-card" data-tags="{data_tags}">
-        <img class="project-thumb" src="{cover}" alt="{alt}">
-        <div class="project-info">
-          <h3>{eyebrow}{title} <span class="status-badge {badge_class}">{badge_text}</span></h3>
-          <p>{desc_html}</p>{tags_html}
-          <a class="project-open" href="{detail_href}">View guitar</a>{specs_preview}{price_html}
-        </div>
-      </div>
-""".rstrip() + "\n"
-
-
-def guitar_detail_html(g: dict, site: dict, template: str) -> str:
-    raw_title = g.get("title", "Untitled Guitar")
-    number = g.get("number", "")
-    title = html.escape(raw_title, quote=True)
-    number_str = html.escape(str(number), quote=True) if number else ""
-    alt = html.escape(g.get("alt", raw_title), quote=True)
-    desc = _lines_to_br(g.get("description", ""))
-    cover = html.escape((g.get("cover_image") or g.get("image") or "").strip(), quote=True)
-
-    status = normalize_status(g.get("status", "In Progress"))
-    badge_class, badge_text = status_badge(status)
-
-    data_tags, tags_html = _card_tags_block(g.get("tags") or [])
-    tags_html = tags_html.strip() if tags_html else ""
-
-    bullets = g.get("bullets") or []
-    bullets_html = ""
-    if bullets:
-        items = "\n".join([f"          <li>{html.escape(str(b), quote=True)}</li>" for b in bullets])
-        bullets_html = f'<ul class="bullets project-bullets">\n{items}\n        </ul>'
-
-    links = g.get("links") or []
-    links_html = ""
-    if links:
-        link_tags = []
-        for link in links:
-            lbl = html.escape((link.get("label") or "Link").strip(), quote=True)
-            url = html.escape((link.get("url") or "").strip(), quote=True)
-            if url:
-                link_tags.append(f'          <a href="{url}" target="_blank" rel="noopener">{lbl}</a>')
-        if link_tags:
-            links_html = f'<div class="links">\n{os.linesep.join(link_tags)}\n        </div>'
-
-    images = g.get("images") or []
-    gallery_html = ""
-    if images:
-        thumbs = "\n".join([
-            f'        <img src="../{html.escape(img.strip(), quote=True)}" alt="{alt}">'
-            for img in images if isinstance(img, str) and img.strip()
-        ])
-        gallery_html = f'<div class="gallery is-open" style="grid-template-columns: repeat(auto-fill,minmax(280px,1fr));">\n{thumbs}\n      </div>'
-
-    specs_table = _guitar_specs_table(g)
-    price_block = _guitar_price_block(g)
-
-    content = replace_placeholders(template, site)
-    mapping = {
-        "{{GUITAR_TITLE}}":              title,
-        "{{GUITAR_NUMBER}}":             number_str,
-        "{{GUITAR_DESCRIPTION}}":        desc,
-        "{{GUITAR_COVER_IMAGE}}":        f"../{cover}" if cover else "",
-        "{{GUITAR_ALT}}":                alt,
-        "{{GUITAR_STATUS_BADGE_CLASS}}": badge_class,
-        "{{GUITAR_STATUS_BADGE_TEXT}}":  badge_text,
-        "{{GUITAR_CARD_TAGS}}":          tags_html,
-        "{{GUITAR_BULLETS}}":            bullets_html,
-        "{{GUITAR_LINKS}}":              links_html,
-        "{{GUITAR_GALLERY}}":            gallery_html,
-        "{{GUITAR_SPECS_TABLE}}":        specs_table,
-        "{{GUITAR_PRICE_BLOCK}}":        price_block,
-    }
-    for key, value in mapping.items():
-        content = content.replace(key, value)
-
-    if GUITAR_STEPS_START not in content or GUITAR_STEPS_END not in content:
-        raise ValueError(
-            "GUITAR_STEPS_START / GUITAR_STEPS_END markers not found in guitar_template.html."
-        )
-
-    start_i = content.index(GUITAR_STEPS_START) + len(GUITAR_STEPS_START)
-    end_i = content.index(GUITAR_STEPS_END)
-    steps_html = _project_steps_html(g.get("steps") or [])
-    content = content[:start_i] + "\n" + steps_html + content[end_i:]
-
-    return content
 
 
 def project_card_html(p: dict) -> str:
@@ -2109,7 +1888,6 @@ def replace_placeholders(content: str, site: dict) -> str:
 
 
 def inject_tags(content: str, tags: list[str]) -> str:
-    # This injects the ABOUT section tags, not per-card tags
     if TAGS_START not in content or TAGS_END not in content:
         return content
 
@@ -2221,78 +1999,12 @@ def rebuild_repairs_page():
         f.write(new_content)
 
 
-def rebuild_all(projects=None, guitars=None):
+def rebuild_all(projects=None):
     if projects is None:
         projects = load_projects()
     rebuild_index_from_projects(projects)
     rebuild_project_pages(projects)
     rebuild_repairs_page()
-    if guitars is None:
-        guitars = load_guitars()
-    rebuild_guitars_page(guitars)
-    rebuild_guitar_pages(guitars)
-
-
-def rebuild_guitars_page(guitars=None):
-    """Regenerate guitars.html from guitars_template.html."""
-    if not os.path.isfile(GUITARS_TEMPLATE_PATH):
-        return  # template not yet in repo — skip silently
-
-    with open(GUITARS_TEMPLATE_PATH, "r", encoding="utf-8") as f:
-        template = f.read()
-
-    if GUITARS_START not in template or GUITARS_END not in template:
-        raise ValueError(
-            "Markers not found in guitars_template.html.\n"
-            "Add:\n<!-- GUITARS_START -->\n<!-- GUITARS_END -->"
-        )
-
-    if guitars is None:
-        guitars = load_guitars()
-
-    rs = template.index(GUITARS_START) + len(GUITARS_START)
-    re_ = template.index(GUITARS_END)
-    cards = "".join(guitar_card_html(g) for g in guitars)
-    new_content = template[:rs] + "\n" + cards + template[re_:]
-
-    if os.path.exists(SITE_PATH):
-        site = load_site()
-        new_content = replace_placeholders(new_content, site)
-
-    with open(GUITARS_INDEX_PATH, "w", encoding="utf-8") as f:
-        f.write(new_content)
-
-
-def rebuild_guitar_pages(guitars=None):
-    """Regenerate guitars/*.html detail pages."""
-    if not os.path.isfile(GUITAR_TEMPLATE_PATH):
-        return  # template not yet in repo — skip silently
-
-    with open(GUITAR_TEMPLATE_PATH, "r", encoding="utf-8") as f:
-        template = f.read()
-
-    if guitars is None:
-        guitars = load_guitars()
-
-    if ensure_guitar_slugs(guitars):
-        save_guitars(guitars)
-
-    site = load_site() if os.path.exists(SITE_PATH) else load_site()
-    os.makedirs(GUITARS_DIR, exist_ok=True)
-    keep_files = set()
-
-    for g in guitars:
-        slug = g.get("slug") or slugify(g.get("title", "guitar"))
-        out_name = f"{slug}.html"
-        out_path = os.path.join(GUITARS_DIR, out_name)
-        keep_files.add(out_name)
-        html_out = guitar_detail_html(g, site, template)
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(html_out)
-
-    for name in os.listdir(GUITARS_DIR):
-        if name.endswith(".html") and name not in keep_files:
-            os.remove(os.path.join(GUITARS_DIR, name))
 
 
 # ---------- Commands ----------
@@ -2335,7 +2047,7 @@ def input_project():
     print("\n=== New Build ===")
     title = prompt("Title")
     status = normalize_status(prompt("Status (Complete / In Progress / Archived)", default="Complete"))
-    alt = prompt("Image alt text (what’s in the photo)", default=title, optional=True)
+    alt = prompt("Image alt text (what's in the photo)", default=title, optional=True)
 
     image_path = prompt("Path to image file (drag/drop the file here)")
     image_rel = copy_image_into_site(image_path, title)
@@ -2355,12 +2067,12 @@ def input_project():
         "slug": slugify(title),
         "status": status,
         "cover_image": image_rel,
-        "image": image_rel,      # legacy/backwards compat
+        "image": image_rel,
         "images": gallery_images,
         "alt": alt,
         "description": description,
         "bullets": bullets,
-        "tags": tags,            # <-- NEW: per-card tags for filtering
+        "tags": tags,
         "links": links,
         "steps": [],
         "created": datetime.now().isoformat(timespec="seconds"),
@@ -2562,7 +2274,7 @@ def input_repair():
         "image": image_rel,
         "alt": alt,
         "notes": notes,
-        "tags": tags,  # <-- NEW: per-card tags for filtering
+        "tags": tags,
         "created": datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -2650,286 +2362,6 @@ def delete_repair():
     print("\nDeleted troubleshooting entry and rebuilt site pages ✅")
 
 
-# ---------- Guitar CLI commands ----------
-
-def list_guitars(guitars):
-    if not guitars:
-        print("No guitars yet.")
-        return
-    print("\nGuitar Portfolio:")
-    for i, g in enumerate(guitars, start=1):
-        number = g.get("number", "?")
-        status = normalize_status(g.get("status", "In Progress"))
-        tags = g.get("tags") or []
-        tag_str = ", ".join(tags) if tags else ""
-        print(
-            f"  {i}. #{number} {g.get('title','Untitled')}  [{status}]"
-            + (f"  ({tag_str})" if tag_str else "")
-        )
-
-
-def choose_guitar_index(guitars: list) -> int:
-    if not guitars:
-        return -1
-    while True:
-        raw = prompt("Select guitar number", optional=True)
-        if not raw:
-            return -1
-        if raw.isdigit():
-            idx = int(raw) - 1
-            if 0 <= idx < len(guitars):
-                return idx
-        print(f"Enter a number between 1 and {len(guitars)} (or press Enter to cancel).")
-
-
-def input_guitar():
-    create_backup_note("input-guitar")
-    guitars = load_guitars()
-
-    print("\n=== New Guitar ===")
-    number = _next_guitar_number(guitars)
-    print(f"  Assigning guitar number: #{number}")
-
-    title = prompt("Guitar name / title")
-    status = normalize_status(prompt("Status (In Progress / Complete / Available / Sold)", default="In Progress"))
-    alt = prompt("Image alt text", default=title, optional=True)
-
-    image_path = prompt("Path to cover image file (drag/drop, or press Enter to skip)", optional=True)
-    image_rel = ""
-    if image_path:
-        try:
-            image_rel = copy_image_into_site(image_path, title)
-        except FileNotFoundError as e:
-            print(e)
-
-    description = prompt_multiline("Description", default="")
-
-    print("\n-- Specs (press Enter to skip any field) --")
-    body_wood      = prompt("Body wood",        optional=True)
-    neck_wood      = prompt("Neck wood",        optional=True)
-    fretboard      = prompt("Fretboard",        optional=True)
-    hardware       = prompt("Hardware",         optional=True)
-    pickups        = prompt("Pickups",          optional=True)
-    finish         = prompt("Finish",           optional=True)
-    scale_length   = prompt("Scale length",     optional=True)
-    est_completion = prompt("Est. completion (e.g. June 2026)", optional=True)
-
-    print("\n-- Pricing / Order (press Enter to skip) --")
-    price_raw      = prompt("Price (numbers only, e.g. 2500)", optional=True)
-    price          = float(price_raw) if price_raw and price_raw.replace(".", "").isdigit() else None
-    customer_name  = prompt("Customer name",    optional=True)
-    deposit_raw    = prompt("Deposit paid",     optional=True)
-    deposit        = float(deposit_raw) if deposit_raw and deposit_raw.replace(".", "").isdigit() else None
-    balance_raw    = prompt("Balance due",      optional=True)
-    balance        = float(balance_raw) if balance_raw and balance_raw.replace(".", "").isdigit() else None
-    customer_notes = prompt("Customer notes",   optional=True)
-
-    bullets = prompt_bullets()
-    tags    = prompt_tags()
-
-    links = []
-    if prompt_yes_no("Add links now? (y/n)", default="n"):
-        links = prompt_links([])
-
-    gallery_images = collect_extra_images(title, existing_images=[])
-
-    guitar = {
-        "title": title,
-        "number": number,
-        "slug": slugify(title),
-        "status": status,
-        "cover_image": image_rel,
-        "image": image_rel,
-        "images": gallery_images,
-        "alt": alt,
-        "description": description,
-        "body_wood": body_wood,
-        "neck_wood": neck_wood,
-        "fretboard": fretboard,
-        "hardware": hardware,
-        "pickups": pickups,
-        "finish": finish,
-        "scale_length": scale_length,
-        "estimated_completion": est_completion,
-        "price": price,
-        "customer_name": customer_name,
-        "deposit_paid": deposit,
-        "balance_due": balance,
-        "customer_notes": customer_notes,
-        "bullets": bullets,
-        "tags": tags,
-        "links": links,
-        "steps": [],
-        "created": datetime.now().isoformat(timespec="seconds"),
-    }
-
-    guitars.insert(0, guitar)
-    save_guitars(guitars)
-    rebuild_guitars_page(guitars)
-    rebuild_guitar_pages(guitars)
-    print("\nAdded guitar and rebuilt guitar pages ✅")
-
-
-def edit_guitar():
-    create_backup_note("edit-guitar")
-    guitars = load_guitars()
-    if not guitars:
-        print("No guitars yet.")
-        return
-
-    print("\n=== Edit Guitar ===")
-    list_guitars(guitars)
-    idx = choose_guitar_index(guitars)
-    if idx < 0:
-        print("Cancelled.")
-        return
-
-    g = guitars[idx]
-    old_title = g.get("title", "Untitled")
-    print(f"\nEditing: #{g.get('number','')} {old_title}")
-
-    new_title = prompt("Guitar name / title", default=old_title)
-    g["title"]  = new_title
-    g["status"] = normalize_status(prompt("Status", default=g.get("status", "In Progress")))
-    g["description"] = prompt_multiline("Description", default=g.get("description", ""))
-
-    print("\n-- Specs (Enter to keep current) --")
-    g["body_wood"]    = prompt("Body wood",    default=g.get("body_wood",    ""), optional=True)
-    g["neck_wood"]    = prompt("Neck wood",    default=g.get("neck_wood",    ""), optional=True)
-    g["fretboard"]    = prompt("Fretboard",    default=g.get("fretboard",    ""), optional=True)
-    g["hardware"]     = prompt("Hardware",     default=g.get("hardware",     ""), optional=True)
-    g["pickups"]      = prompt("Pickups",      default=g.get("pickups",      ""), optional=True)
-    g["finish"]       = prompt("Finish",       default=g.get("finish",       ""), optional=True)
-    g["scale_length"] = prompt("Scale length", default=g.get("scale_length", ""), optional=True)
-    g["estimated_completion"] = prompt("Est. completion", default=g.get("estimated_completion", ""), optional=True)
-
-    print("\n-- Pricing / Order --")
-    price_raw = prompt("Price", default=str(g.get("price") or ""), optional=True)
-    g["price"] = float(price_raw) if price_raw and price_raw.replace(".", "").isdigit() else g.get("price")
-    g["customer_name"]  = prompt("Customer name",  default=g.get("customer_name",  ""), optional=True)
-    dep_raw = prompt("Deposit paid", default=str(g.get("deposit_paid") or ""), optional=True)
-    g["deposit_paid"] = float(dep_raw) if dep_raw and dep_raw.replace(".", "").isdigit() else g.get("deposit_paid")
-    bal_raw = prompt("Balance due",  default=str(g.get("balance_due")  or ""), optional=True)
-    g["balance_due"]  = float(bal_raw) if bal_raw and bal_raw.replace(".", "").isdigit() else g.get("balance_due")
-    g["customer_notes"] = prompt("Customer notes", default=g.get("customer_notes", ""), optional=True)
-
-    bullets_mode = prompt("Bullets (keep / edit / clear)", default="keep", optional=True).strip().lower()
-    if bullets_mode in ["edit", "e"]:
-        g["bullets"] = prompt_bullets(default_list=g.get("bullets", []))
-    elif bullets_mode in ["clear", "remove"]:
-        g["bullets"] = []
-
-    tags_mode = prompt("Tags (keep / edit / clear)", default="keep", optional=True).strip().lower()
-    if tags_mode in ["edit", "e"]:
-        g["tags"] = prompt_tags(default_list=g.get("tags", []))
-    elif tags_mode in ["clear", "remove"]:
-        g["tags"] = []
-
-    g["links"] = prompt_links(default_links=g.get("links", []))
-
-    if prompt_yes_no("Replace cover image? (y/n)", default="n"):
-        image_path = prompt("Path to new cover image")
-        try:
-            image_rel = copy_image_into_site(image_path, new_title)
-            g["cover_image"] = image_rel
-            g["image"]       = image_rel
-        except FileNotFoundError as e:
-            print(e)
-
-    g["images"] = collect_extra_images(new_title, existing_images=g.get("images", []))
-
-    if new_title != old_title and (not g.get("slug") or g.get("slug") == slugify(old_title)):
-        g["slug"] = slugify(new_title)
-
-    g["updated"] = datetime.now().isoformat(timespec="seconds")
-    save_guitars(guitars)
-    rebuild_guitars_page(guitars)
-    rebuild_guitar_pages(guitars)
-    print("\nUpdated guitar and rebuilt guitar pages ✅")
-
-
-def delete_guitar():
-    create_backup_note("delete-guitar")
-    guitars = load_guitars()
-    if not guitars:
-        print("No guitars yet.")
-        return
-
-    print("\n=== Delete Guitar ===")
-    list_guitars(guitars)
-    idx = choose_guitar_index(guitars)
-    if idx < 0:
-        print("Cancelled.")
-        return
-
-    title = guitars[idx].get("title", "Untitled")
-    if not prompt_yes_no(f"Delete '{title}' permanently? (y/n)", default="n"):
-        print("Cancelled.")
-        return
-
-    guitars.pop(idx)
-    save_guitars(guitars)
-    rebuild_guitars_page(guitars)
-    rebuild_guitar_pages(guitars)
-    print("\nDeleted guitar and rebuilt pages ✅")
-
-
-def edit_guitar_steps():
-    create_backup_note("edit-guitar-story")
-    guitars = load_guitars()
-    if not guitars:
-        print("No guitars yet.")
-        return
-
-    print("\n=== Edit Guitar Build Story ===")
-    list_guitars(guitars)
-    idx = choose_guitar_index(guitars)
-    if idx < 0:
-        print("Cancelled.")
-        return
-
-    guitar = guitars[idx]
-    existing_steps = guitar.get("steps") or []
-    print(f"\nSelected: #{guitar.get('number','')} {guitar.get('title','Untitled')} ({len(existing_steps)} existing sections)")
-
-    mode = prompt("Mode (add / replace / clear)", default="add", optional=True).strip().lower()
-    if mode in ["clear", "remove"]:
-        guitar["steps"] = []
-        guitar["updated"] = datetime.now().isoformat(timespec="seconds")
-        save_guitars(guitars)
-        rebuild_guitars_page(guitars)
-        rebuild_guitar_pages(guitars)
-        print("\nCleared all story sections ✅")
-        return
-
-    steps = [] if mode in ["replace", "reset"] else list(existing_steps)
-
-    while True:
-        step_no    = len(steps) + 1
-        step_title = prompt(f"Section {step_no} title", default=f"Part {step_no}", optional=True)
-        step_text  = prompt_multiline("Section text", default="")
-
-        add_photo  = prompt("Add section photo? (y/n)", default="n", optional=True).lower()
-        step_image = ""
-        step_alt   = ""
-        if add_photo == "y":
-            image_path = prompt("Path to image file (drag/drop)")
-            step_image = copy_image_into_site(image_path, f"{guitar.get('title','guitar')}-step-{step_no}")
-            step_alt   = prompt("Section image alt text", default=step_title, optional=True)
-
-        steps.append({"title": step_title, "text": step_text, "image": step_image, "alt": step_alt})
-
-        if prompt("Add another section? (y/n)", default="y", optional=True).lower() != "y":
-            break
-
-    guitar["steps"]   = steps
-    guitar["updated"] = datetime.now().isoformat(timespec="seconds")
-    save_guitars(guitars)
-    rebuild_guitars_page(guitars)
-    rebuild_guitar_pages(guitars)
-    print("\nSaved guitar story sections ✅")
-
-
 def edit_site():
     create_backup_note("edit-site")
     site = load_site()
@@ -2942,6 +2374,7 @@ def edit_site():
     site["email"] = prompt("Email", default=site.get("email", ""))
     site["instagram_url"] = prompt("Instagram URL", default=site.get("instagram_url", ""))
     site["youtube_url"] = prompt("YouTube URL", default=site.get("youtube_url", ""))
+    site["photo_inbox"] = prompt("Photo inbox folder", default=site.get("photo_inbox", get_photo_inbox_dir()))
 
     print("\nAbout tags (these show in the About section).")
     site["tags"] = prompt_tags(default_list=site.get("tags", []))
@@ -3013,27 +2446,22 @@ def restore_backup_interactive():
 
 def print_menu():
     print("\nCommands:")
-    print("  1) input-project      (add new build)")
-    print("  2) edit-project       (edit build details)")
-    print("  3) edit-story         (add/replace build story sections)")
-    print("  4) list-projects      (show builds list)")
-    print("  5) rebuild            (regenerate all pages)")
-    print("  6) edit-site          (name, about, contact, tags)")
-    print("  7) input-repair       (add repair entry)")
-    print("  8) list-repairs       (show repairs list)")
-    print("  9) edit-repair        (edit repair entry)")
-    print(" 10) delete-project     (remove build + page)")
-    print(" 11) delete-repair      (remove repair entry)")
-    print(" 12) undo-last          (restore latest backup)")
-    print(" 13) list-backups       (show JSON backups)")
-    print(" 14) restore-backup     (choose backup to restore)")
-    print(" 15) publish-github     (git add/commit/push)")
-    print(" 16) web-ui             (open browser admin menu)")
-    print(" 17) input-guitar       (add new guitar to portfolio)")
-    print(" 18) edit-guitar        (edit guitar details + specs)")
-    print(" 19) edit-guitar-story  (add/replace guitar build story)")
-    print(" 20) list-guitars       (show guitar portfolio)")
-    print(" 21) delete-guitar      (remove guitar from portfolio)")
+    print("  1) input-project   (add new build)")
+    print("  2) edit-project    (edit build details)")
+    print("  3) edit-story      (add/replace build story sections with photos + text)")
+    print("  4) list-projects   (show builds list)")
+    print("  5) rebuild         (regenerate index.html + repairs.html + project pages)")
+    print("  6) edit-site       (name, about, contact, tags)")
+    print("  7) input-repair    (add troubleshooting entry)")
+    print("  8) list-repairs    (show troubleshooting list)")
+    print("  9) edit-repair     (edit troubleshooting entry)")
+    print(" 10) delete-project  (remove build + project page)")
+    print(" 11) delete-repair   (remove troubleshooting entry)")
+    print(" 12) undo-last       (restore latest backup)")
+    print(" 13) list-backups    (show JSON backups)")
+    print(" 14) restore-backup  (choose backup to restore)")
+    print(" 15) publish-github  (git add/commit/push all changes)")
+    print(" 16) web-ui          (open browser admin menu)")
     print("  q) quit")
 
 
@@ -3057,7 +2485,7 @@ def main():
         if cmd in ["q", "quit", "exit", "0"]:
             print("Goodbye.")
             break
-        elif cmd in ["1", "input-project", "add", "new"]:
+        if cmd in ["1", "input-project", "add", "new"]:
             input_project()
         elif cmd in ["2", "edit-project", "project-edit"]:
             edit_project()
@@ -3067,7 +2495,7 @@ def main():
             list_projects(load_projects())
         elif cmd in ["5", "rebuild", "build"]:
             rebuild_all()
-            print("\nRebuilt all pages ✅")
+            print("\nRebuilt index.html + repairs.html + projects/*.html ✅")
         elif cmd in ["6", "edit-site", "site"]:
             edit_site()
         elif cmd in ["7", "input-repair", "repair", "new-repair"]:
@@ -3095,16 +2523,6 @@ def main():
             if port_raw.isdigit():
                 port = int(port_raw)
             start_web_ui(host=host or "127.0.0.1", port=port)
-        elif cmd in ["17", "input-guitar", "add-guitar", "new-guitar", "guitar"]:
-            input_guitar()
-        elif cmd in ["18", "edit-guitar", "guitar-edit"]:
-            edit_guitar()
-        elif cmd in ["19", "edit-guitar-story", "guitar-story", "guitar-steps"]:
-            edit_guitar_steps()
-        elif cmd in ["20", "list-guitars", "guitars"]:
-            list_guitars(load_guitars())
-        elif cmd in ["21", "delete-guitar", "remove-guitar"]:
-            delete_guitar()
         else:
             print("Unknown command.")
 

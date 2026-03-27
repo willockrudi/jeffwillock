@@ -871,9 +871,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        # Fall through to admin handler (patched in below)
-        self.send_response(404)
-        self.end_headers()
+        # /admin routes handled by patched do_GET below
+        pass
 
     def do_POST(self):
         parsed = urlparse(self.path)
@@ -906,7 +905,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._json({"ok": ok, "message": msg})
             return
 
-        self._json({"ok": False, "message": "Unknown action."}, 404)
+        # /admin POST routes handled by patched do_POST
+        pass
 
     def log_message(self, fmt, *args):
         return  # suppress default access log noise

@@ -1,69 +1,165 @@
-JC Custom Guitars Site
+# 🎸 JC Custom Guitars - Complete Admin System
 
-Simple static site + Python editor script for:
+## Zero-Friction Workflow for Documenting Guitar Builds
 
-custom guitar build logs
-repair and restoration logs
-site profile content (about/contact)
-Files
-index.html – main builds page (generated)
-repairs.html – repairs and restoration page (generated)
-projects/*.html – per-build detail pages (generated)
-template.html – template used to rebuild index.html
-repairs_template.html – template used to rebuild repairs.html
-project_template.html – template used to rebuild per-build pages
-projects.json – build entries
-repairs.json – repair entries
-site.json – profile, contact, and about content
-manage.py – editor/admin script
-Run
+This system lets your dad document his guitar work with **zero technical knowledge needed**.
 
-From this folder:
+### The Workflow:
 
-python3 manage.py
+```
+📱 IPHONE                    ☁️ GOOGLE DRIVE                   🖥️ COMPUTER
+─────────                    ──────────────                    ──────────
+Take photo/video  ──────►  Auto-syncs to cloud  ──────►  Shows in admin
+Pick which build            Organized by build               One-click publish
+Done!                       You can also access              Website updated!
+```
 
-Then choose a command:
+---
 
-input-project – add a new guitar build
-edit-project – edit build details (title, status, cover, gallery, tags, links, text)
-edit-story – edit build story sections (photos + text)
-input-repair – add a new repair or restoration log
-edit-repair – edit an existing repair entry
-delete-project – remove a build and its generated page
-delete-repair – remove a repair entry
-undo-last – restore the latest JSON backup
-list-backups – show available backups
-restore-backup – restore a specific backup
-publish-github – commit and push changes to GitHub
-web-ui – launch a local browser-based admin menu
-edit-site – update name, about text, contact info, tags
-list-projects – list builds
-list-repairs – list repairs
-rebuild – regenerate the site pages from JSON + templates
-Typical workflow
-Add or edit builds and repairs using manage.py.
-Run rebuild (or use commands that rebuild automatically).
-Open index.html in a browser and verify changes.
-Run publish-github to update the live site.
+## 📦 What's Included
 
-manage.py runs in a loop until you choose q to quit.
+| File | Purpose |
+|------|---------|
+| `manage.py` | The admin dashboard server |
+| `setup.sh` | One-time setup script |
+| `Start JC Custom.command` | Double-click to start admin |
+| `IPHONE_SETUP.md` | Guide for setting up iPhone shortcuts |
 
-Web Admin UI
+---
 
-From manage.py, choose web-ui.
+## 🚀 Quick Setup (5 minutes)
 
-Default URL:
+### On Dad's Mac:
 
-http://127.0.0.1:8081
+1. **Install Google Drive for Desktop**
+   - Download from: https://www.google.com/drive/download/
+   - Sign in with Google account
 
-The web UI lets you:
+2. **Run the setup script**
+   ```bash
+   cd /path/to/jccustom_complete
+   bash setup.sh
+   ```
 
-rebuild and publish
-edit site settings
-add/delete builds and repairs
-manage build story sections
-Notes
-Images are copied into the images/ folder when you add entries with photos.
-Backups are stored in .backups/ before content-editing commands.
-The site is generated from JSON files using templates, so you don’t need to edit HTML directly for new builds or repairs.
-publish-github uses your local git credentials and pushes the current branch to GitHub.
+3. **Done!** A "🎸 JC Custom Admin" shortcut appears on Desktop
+
+### On Dad's iPhone:
+
+1. **Install Google Drive app** from App Store
+2. **Sign in** with the SAME Google account
+3. **Set up auto-upload** (see IPHONE_SETUP.md)
+
+---
+
+## 🎯 How Dad Uses It
+
+### Taking Photos/Videos:
+
+**Easiest method:** Just use the normal Camera app. Photos auto-upload to Google Drive.
+
+**Organized method:** Use the shortcut that asks "Which build?" after each photo.
+
+### Managing the Website:
+
+1. **Double-click** "🎸 JC Custom Admin" on Desktop
+2. Browser opens with all builds and photos
+3. Click **"Edit for Site"** on a build
+4. Pick cover photo, add description
+5. Click **"Publish Online"**
+
+That's it! Website is updated.
+
+---
+
+## 📁 Folder Structure
+
+Everything lives in Google Drive, so both dad and you can access it:
+
+```
+Google Drive/
+└── JC Custom Guitars/
+    ├── _site_data/          ← Website data (JSON files)
+    ├── _config.json         ← Settings
+    ├── Telecaster Build/    ← Build folder
+    │   ├── photo1.jpg
+    │   ├── video1.mov
+    │   └── ...
+    ├── Stratocaster/        ← Another build
+    │   └── ...
+    └── manage.py            ← Admin server
+```
+
+---
+
+## 🔧 Configuration
+
+Edit `_config.json` in the Google Drive folder:
+
+```json
+{
+  "drive_folder": "/path/to/Google Drive/JC Custom Guitars",
+  "website_folder": "/path/to/github/repo",
+  "owner_name": "Jeff Willock",
+  "site_name": "JC Custom Guitars"
+}
+```
+
+---
+
+## ❓ Troubleshooting
+
+### "Photos not showing up"
+- Open Google Drive app on iPhone, pull down to refresh
+- Wait 1-2 minutes for sync
+- Check both devices use the same Google account
+
+### "Can't start admin"
+- Make sure Python 3 is installed: `python3 --version`
+- Check the log: `cat /tmp/jccustom.log`
+
+### "Website not updating"
+- Make sure the website folder is a git repository
+- Check git credentials are set up
+
+---
+
+## 🆘 Help for Dad
+
+Print this card and put it by the computer:
+
+```
+┌─────────────────────────────────────────┐
+│  🎸 JC CUSTOM GUITARS - QUICK GUIDE    │
+├─────────────────────────────────────────┤
+│                                         │
+│  📷 TAKE PHOTOS:                        │
+│     Just use your iPhone camera!        │
+│     Photos sync automatically.          │
+│                                         │
+│  🖥️ MANAGE WEBSITE:                     │
+│     1. Double-click guitar icon         │
+│     2. Pick a build                     │
+│     3. Click "Edit for Site"            │
+│     4. Click "Publish Online"           │
+│                                         │
+│  ❓ PROBLEMS?                           │
+│     Call [Your Name]: [Your Phone]      │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## 👨‍👦 Remote Help
+
+Since everything is in Google Drive, you can help remotely:
+
+1. **View photos**: Access the shared Google Drive folder
+2. **Edit website**: Make changes to the builds.json file
+3. **Debug**: Check /tmp/jccustom.log on his computer via screen share
+
+---
+
+## License
+
+MIT - Do whatever you want with it!

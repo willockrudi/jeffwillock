@@ -7,3 +7,9 @@ Thumbs.db
 # Python
 __pycache__/
 *.pyc
+.gphoto_credentials.json
+.gphoto_token.json
+.gphoto_service.json
+state.json
+.venv/
+_Incoming/

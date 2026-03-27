@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=JC Custom Guitars
+Comment=Launch JC Custom shop dashboard
+Exec=bash /home/rudi/Documents/dev/my_websites/jeffwillock/launch_jccustom_admin.sh
+Icon=/home/rudi/Documents/dev/my_websites/jeffwillock/images/logo.png
+Terminal=false
+StartupNotify=false
+Categories=Utility;

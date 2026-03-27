@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "sound-silicon-491517-b5",
+  "private_key_id": "146172ae954d85c08af7f0ef24bb81d1fb85db13",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDFDY/Ganx98Wbs\nCYp8kHAb+AQTjjl07TbTEUuDUAZ3oqQ+dDUsH/aCtEShxMfO5mzy26q0PlcCXPfj\nxPL6ADEThGY0iwyN91X/z6hfJUb14mvd3P5nbihPSpZdfPY154dlkpXHTLJvmQHW\nK8qyHZUtp3KA1sYq6N0JJtQwhw7k8Mq7gijKp2cgH2qEw3wQKKtBTHGprzg9foNS\nv808twlDP7kZW94M0JQJDtzg4V0+WxOtKy4lfGcBuFy9DuB4DCBhSdeR5h5KyUmI\nakkLwWgDm4ICqdcru4+ydhvkarbnIZI5gRPqxlnTG6uRv2hIGhjfngUxHFteBhCJ\nqPkrJ1wFAgMBAAECggEAAx5IhayYUfF/HiiCfmxWUdYv0YcBJfZxCFyjZy13hLu+\np9X0vdq3O6QSdMR/H8LDiGftTVMYbMs/ov7Lx4s3bsy8EoQwZSvvIPa0yxioa4Pm\ndOLZf2KELpXXR+oOOi+MekRPeXfSi3PBtMijOWrz07HTXPJivWzk8cJuPi+M9Unk\nSjpDoUw97MNjQtmI5chqfxfBoeyXGIopKBAvwGLRhinbZgBC4v801x/C1s8viXIE\narnjEcYEDzscryYTnsmfUfuKs/3HeK3qeY1Hb88yCKQYTyCG6GRhkO8Kulf9YH/d\ncM12W6spJF1UbU5yHweVjHDJu2Yw8nbKXUa4r5lRGwKBgQDmZgSulUIXQDdT+Mnf\nzy4LXKlxWEoJPyndHmpKMF9rrz0X2V19THl3u2P7Y/j3VSUGZx9ZLLMwE3nqbHgX\n0hLdPoIuUC4ppX+7JXVvdT4mWsS5mjZn8NX0/VkjthEGl/cWo79THhwCLt9i3+OM\ngsfjIEln6LG4HorEkUYpOwSWQwKBgQDa8vycjb9avAM8FQwpRTipPwq+JPVCqM+A\n5pFxCRdifRVTQhoNTefsdTYVjeJpwQlbqPR1AmRMH3JUPAMUwjOwFzyxS6uyYPbs\nvNGBRUswH+7pYXTVOHS1gsex6JzytmKOLiG8LQcnAeT0CyxMKgG4WHALmYw/BDSe\nbHq3RgL0FwKBgQCyYehcFzntcI2l2SjLvMfEikCyfg4MbLgH+EWJHTyzziC591RX\n777YAeEeQUAAlw6sj2kJDP/LSDkLVGIC52Ytn/kAzJmBKx7jEdSDsD2nSn2nygs3\nnJK7NPAwIwW5miz3fV5jhxteYVYZYoj2QEdsxZGv/syiZhtAp82vnH8nqwKBgEv/\nY6eDnBQGhqjoNVxt5oj4lOYDNg55Qe1gGsO9gBxzhl9r5lcP35y34poAscI7euAR\n+ShUODQkBi8u1XLzJbXNmwd/WI2GEq+BqsbQIpUFwIvJhCAuhHQsfNxH/ZJRtEvd\nv1/t0Tm88pey+SFGw2oVaG7eUUveTdVfmgjbiFLpAoGAU+K0r3ukXKDpkNoXQZJw\nUKVGxiaPmpj9tkdPiclfLTI5NCDaU+Gj+3e+i8+C/gGxnCeC0BE2osy1Srjtbfmc\nep1d+eJhWYM+TXFXbXzsaCVIqkndC/a7Q0fxpTATqCYxpZk7SGfeVYV8wqPv7dAa\npXaO3KpZxCpSfuJfK21xcMk=\n-----END PRIVATE KEY-----\n",
+  "client_email": "jc-custom-watcher@sound-silicon-491517-b5.iam.gserviceaccount.com",
+  "client_id": "100211355244033771883",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/jc-custom-watcher%40sound-silicon-491517-b5.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

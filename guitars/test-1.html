@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>test 1 | Jeff Willock</title>
+  <link rel="stylesheet" href="../style.css" />
+  <script>
+    (function () {
+      try {
+        const saved = localStorage.getItem("theme");
+        if (saved === "light") document.documentElement.setAttribute("data-theme", "light");
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../index.html">JC<span>Custom Guitars</span></a>
+    <ul class="nav-links">
+      <li><a href="../index.html#builds">Builds</a></li>
+      <li><a href="../guitars.html">Guitars</a></li>
+      <li><a href="../repairs.html">Repairs</a></li>
+      <li><a href="../index.html#about">About</a></li>
+      <li><a href="../index.html#contact">Contact</a></li>
+    </ul>
+    <button id="themeToggle" class="theme-toggle" type="button">Light Mode</button>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="container">
+    <p class="hero-eyebrow">Guitar #1</p>
+    <h1 class="hero-title">test 1</h1>
+    <p class="hero-subtitle">✅ Complete</p>
+    <p class="hero-bio"></p>
+    <div class="hero-cta">
+      <a href="../guitars.html" class="btn btn-primary">Back to Guitars</a>
+      <a href="../index.html#contact" class="btn btn-outline">Contact</a>
+    </div>
+  </div>
+</section>
+
+<main>
+
+<section class="projects">
+  <div class="container">
+
+    <img class="project-detail-image" src="../" alt="boobs" />
+
+    <div class="project-info" style="margin-top: 28px;">
+
+      <div class="card-tags" style="margin-bottom: 18px;">
+        
+      </div>
+
+      <!-- Specs table -->
+      
+
+      <!-- Bullets -->
+      
+
+      <!-- Links -->
+      
+
+      <!-- Price / order info -->
+      
+
+    </div>
+
+  </div>
+</section>
+
+<!-- Build story steps -->
+<section class="about">
+  <div class="container">
+    <div class="section-header">
+      <p class="section-label">Build Process</p>
+      <h2 class="section-title">Story</h2>
+    </div>
+
+    <!-- GUITAR_STEPS_START -->
+<!-- GUITAR_STEPS_END -->
+
+  </div>
+</section>
+
+<!-- Gallery -->
+<section class="projects" id="gallery-section" style="display:none;">
+  <div class="container">
+    <div class="section-header">
+      <p class="section-label">Photos</p>
+      <h2 class="section-title">Gallery</h2>
+    </div>
+    
+  </div>
+</section>
+
+<section class="contact">
+  <div class="container">
+    <div class="section-header">
+      <p class="section-label">Contact</p>
+      <h2 class="section-title">Interested In This Guitar?</h2>
+    </div>
+    <p>Email: <a href="mailto:"></a></p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>© <span id="year"></span> Jeff Willock</p>
+  </div>
+</footer>
+
+<script>document.getElementById("year").textContent = new Date().getFullYear();</script>
+<script>
+  // Show gallery section only if it has images
+  (function () {
+    const sec = document.getElementById("gallery-section");
+    if (sec) {
+      const imgs = sec.querySelectorAll("img");
+      if (imgs.length > 0) sec.style.display = "";
+    }
+  })();
+</script>
+<script>
+  (function () {
+    const root = document.documentElement;
+    const btn = document.getElementById("themeToggle");
+    function setTheme(mode) {
+      if (mode === "light") { root.setAttribute("data-theme", "light"); if (btn) btn.textContent = "Dark Mode"; }
+      else { root.removeAttribute("data-theme"); if (btn) btn.textContent = "Light Mode"; }
+    }
+    let saved = null;
+    try { saved = localStorage.getItem("theme"); } catch (e) {}
+    setTheme(saved === "light" ? "light" : "dark");
+    if (btn) btn.addEventListener("click", () => {
+      const isLight = root.getAttribute("data-theme") === "light";
+      const next = isLight ? "dark" : "light";
+      try { localStorage.setItem("theme", next); } catch (e) {}
+      setTheme(next);
+    });
+  })();
+</script>
+
+</body>
+</html>

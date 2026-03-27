@@ -1,0 +1,15 @@
+No worries on the Cloud project — I'll walk you through exactly what to click when we get there. It's about 5 minutes of setup.
+
+Here's the definitive build order, each step unblocks the next:
+
+Phase 1 — Data foundation
+
+    manage.py guitar extensions — input-guitar, edit-guitar, delete-guitar, list-guitars
+    guitars.json data model + guitar_template.html — per-guitar pages on the site
+    Rebuild pipeline — guitars/ pages generated same way as projects/
+
+Phase 2 — Photo pipeline 4. Google Cloud project + Photos API credentials (you do this during your visit) 5. watcher.py — polls Google Photos API, drops new photos into _Incoming/ 6. state.json — tracks last sync timestamp, storage usage
+
+Phase 3 — Dashboard 7. Dashboard HTML + Python server — Mac Mini fullscreen app 8. iPad layout — same server, mobile breakpoint 9. Photo assignment UI — _Incoming/ tray + UNDO 10. Customer panel — customers.json + order tracking
+
+Phase 4 — Publishing + automation 11. Publish pipeline — build + git push + 3-state status feedback 12. launch.sh — desktop icon + kiosk mode 13. Cron jobs — nightly auto-publish + storage warning

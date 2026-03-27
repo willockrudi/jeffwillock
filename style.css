@@ -624,3 +624,85 @@ footer {
     width: 100%;
   }
 }
+/* ============================================================
+   ADDITIONS FOR style.css
+   Paste at the bottom of the existing style.css file
+   ============================================================ */
+
+
+/* NAV LOGO — wider text for "JC Custom Guitars" */
+.nav-logo {
+  font-size: 1.22rem;   /* slightly smaller so it fits on one line */
+  letter-spacing: 0.02em;
+}
+
+
+/* GUITAR SPECS TABLE */
+.specs-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 18px 0;
+  font-size: 0.97rem;
+}
+
+.specs-table th,
+.specs-table td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.specs-table th {
+  width: 38%;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.specs-table td {
+  color: var(--text);
+}
+
+.specs-table tr:last-child th,
+.specs-table tr:last-child td {
+  border-bottom: none;
+}
+
+
+/* GUITAR PRICE BLOCK */
+.price-block {
+  margin-top: 22px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.guitar-price {
+  font-size: 1.4rem;
+  margin: 0 0 8px;
+}
+
+.guitar-customer-notes {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+
+/* PROJECT / GUITAR STEP IMAGES */
+.step-image {
+  display: block;
+  width: 100%;
+  max-width: 760px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  margin-top: 14px;
+}
+
+.project-step {
+  margin-bottom: 40px;
+}
+
+.project-step h3 {
+  margin: 0 0 10px;
+  font-size: 1.2rem;
+}
